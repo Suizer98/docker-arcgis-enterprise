@@ -74,6 +74,13 @@ services:
     ports:
       - "7080:7080"
       - "7443:7443"
+    ulimits:
+      nofile:
+        soft: 70000
+        hard: 70000
+      nproc:
+        soft: 30000
+        hard: 30000
     volumes:
       - ./Installers/PortalForArcGIS:/app/Installer:ro
       - ./Licenses/ArcGISPortal.json:/app/portal_license.json:ro
@@ -104,6 +111,13 @@ services:
     ports:
       - "2443:2443"
       - "9876:9876"
+    ulimits:
+      nofile:
+        soft: 70000
+        hard: 70000
+      nproc:
+        soft: 30000
+        hard: 30000
     volumes:
       - ./Installers/DataStore:/app/Installer:ro
       - datastore_home:/home/arcgis:rw

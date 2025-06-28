@@ -2,6 +2,10 @@
 
 > **Fork Notice**: This is a fork of the original [docker-arcgis-enterprise](https://github.com/Wildsong/docker-arcgis-enterprise) repository by Wildsong.
 
+Tech stacks:
+
+![Tech stacks](https://skillicons.dev/icons?i=docker,ubuntu,bash)
+
 ## Changes in this fork
 
 The main changes in this fork include:
