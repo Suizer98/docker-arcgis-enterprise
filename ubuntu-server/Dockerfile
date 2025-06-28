@@ -1,4 +1,4 @@
-From ubuntu:jammy
+FROM ubuntu:jammy
 LABEL maintainer="brian@wildsong.biz"
 ENV REFRESHED_AT 2024-03-01
 

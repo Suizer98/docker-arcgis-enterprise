@@ -24,6 +24,7 @@ volumes:
 
 services:
   server:
+    platform: linux/amd64
     image: arcgis-server
     hostname: ${GISSERVER}
     build: 
@@ -37,9 +38,16 @@ services:
     ports:
       - "6080:6080"
       - "6443:6443"
+    ulimits:
+      nofile:
+        soft: 70000
+        hard: 70000
+      nproc:
+        soft: 30000
+        hard: 30000
     volumes:
       - ./Installers/ArcGISServer:/app/Installer:ro
-      - ./Licenses/server.prvc:/app/server.prvc:ro
+      - ./Licenses/ArcGISServer.prvc:/app/server.prvc:ro
       - ./configurebasedeployment.properties:/app/configurebasedeployment.properties:rw
       - server_home:/home/arcgis:rw
       - server_data:/srv/directories:rw
@@ -51,6 +59,7 @@ services:
     #tty: true
 
   portal:
+    platform: linux/amd64
     image: arcgis-portal
     hostname: ${PORTAL}
     build:
@@ -67,7 +76,7 @@ services:
       - "7443:7443"
     volumes:
       - ./Installers/PortalForArcGIS:/app/Installer:ro
-      - ./Licenses/portal.json:/app/portal_license.json:ro
+      - ./Licenses/ArcGISPortal.json:/app/portal_license.json:ro
       - portal_home:/home/arcgis:rw
       - portal_data:/home/arcgis/content:rw
      #- portal_data:/home/arcgis/portal/usr/arcgisportal:rw
@@ -80,6 +89,7 @@ services:
 #    tty: true
 
   datastore:
+    platform: linux/amd64
     image: arcgis-datastore
     hostname: ${DATASTORE}
     build: 
@@ -107,6 +117,7 @@ services:
     #tty: true
 
   postgres:
+    platform: linux/amd64
     image: postgres
     build:
       context: .
@@ -122,6 +133,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
   pgadmin:
+    platform: linux/amd64
     image: dpage/pgadmin4:latest
     ports:
       - "8213:80"
