@@ -70,7 +70,8 @@ services:
       - ESRI_VERSION=${ESRI_VERSION}
       - AGP_USERNAME=${USERNAME}
       - AGP_PASSWORD=${PASSWORD} 
-      - PORTAL_CONTENT=/srv/content
+      - PORTAL_CONTENT=/home/arcgis/content
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
     ports:
       - "7080:7080"
       - "7443:7443"
