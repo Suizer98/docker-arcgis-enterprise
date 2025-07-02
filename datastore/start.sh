@@ -30,7 +30,7 @@ else
   /app/Installer/Setup -m silent --verbose -l yes -d /home
 fi
 
-DATASTORE_URL="https://${HOSTNAME}:2443/arcgis/"
+DATASTORE_URL="https://${HOSTNAME}:2443/arcgis/datastore"
 echo -n "Waiting for Datastore to start.. "
 sleep 10
 # --head = only header
