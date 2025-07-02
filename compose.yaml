@@ -120,7 +120,7 @@ services:
         soft: 30000
         hard: 30000
     volumes:
-      - ./Installers/DataStore:/app/Installer:ro
+      - ./Installers/ArcGISDataStore_Linux:/app/Installer:ro
       - datastore_home:/home/arcgis:rw
 # where does this belong
 #      - datastore_data:/home/arcgis/?????:rw
