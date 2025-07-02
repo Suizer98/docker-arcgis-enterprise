@@ -58,7 +58,7 @@ CONFIG_STORE="/home/arcgis/portal/framework/etc/config-store-connection.json"
 if [ -f $CONFIG_STORE ]; then
   /home/arcgis/portal/tools/accountmanagement/CreateAdminAccount list
 else
-  echo "Portal is not configured."
+  echo "Portal is not configured with admin account."
 fi
 
 echo "Try reaching me at ${PORTAL_URL}"
