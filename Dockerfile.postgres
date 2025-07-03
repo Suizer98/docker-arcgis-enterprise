@@ -9,6 +9,6 @@ RUN apt-get update && apt-get install -y procps iproute2 iputils-ping
 # Add files to support Esri ArcGIS geometry
 COPY Installers/PostgreSQL/15/Linux64/st_geometry.so ${PKGLIBDIR}
 # I wonder what this file is for?
-COPY Installers/PostgreSQL/15/Linux64/PGSQLEngine.so ${PKGLIBDIR}
+# COPY Installers/PostgreSQL/15/Linux64/PGSQLEngine.so ${PKGLIBDIR}
 
 VOLUME /var/lib/postgresql/data
