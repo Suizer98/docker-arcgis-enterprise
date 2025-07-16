@@ -27,6 +27,10 @@ docker buildx build --platform linux/amd64 -t ubuntu-server ubuntu-server
 
 This command explicitly specifies the Linux AMD64 platform for better compatibility when running on Mac with Docker Desktop or OrbStack.
 
+## One time authorisation
+
+Please refer to this [website](https://enterprise.arcgis.com/en/server/10.9.1/install/linux/silently-install-arcgis-server.htm) to do one time authorisation for your .prvc provisioning file, if you want to generate .ecp file for arcgis server.
+
 ## Original Repository
 
 For the original project and full documentation, please visit:
