@@ -22,6 +22,10 @@ volumes:
   pgadmin_data:
     name: arcgis_pgadmin_data
 
+networks:
+  arcgis_network:
+    driver: bridge
+
 services:
   server:
     platform: linux/amd64
@@ -38,11 +42,8 @@ services:
     ports:
       - "6080:6080"
       - "6443:6443"
-    extra_hosts:
-      - "localhost:127.0.0.1"
-      - "PORTAL.LOCAL:127.0.0.1"
-      - "SERVER.LOCAL:127.0.0.1"
-      - "DATASTORE.LOCAL:127.0.0.1"
+    networks:
+      - arcgis_network
     ulimits:
       nofile:
         soft: 70000
@@ -80,11 +81,8 @@ services:
     ports:
       - "7080:7080"
       - "7443:7443"
-    extra_hosts:
-      - "localhost:127.0.0.1"
-      - "PORTAL.LOCAL:127.0.0.1"
-      - "SERVER.LOCAL:127.0.0.1"
-      - "DATASTORE.LOCAL:127.0.0.1"
+    networks:
+      - arcgis_network
     ulimits:
       nofile:
         soft: 70000
@@ -122,11 +120,8 @@ services:
     ports:
       - "2443:2443"
       - "9876:9876"
-    extra_hosts:
-      - "localhost:127.0.0.1"
-      - "PORTAL.LOCAL:127.0.0.1"
-      - "SERVER.LOCAL:127.0.0.1"
-      - "DATASTORE.LOCAL:127.0.0.1"
+    networks:
+      - arcgis_network
     ulimits:
       nofile:
         soft: 70000
