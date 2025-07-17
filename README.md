@@ -27,6 +27,14 @@ docker buildx build --platform linux/amd64 -t ubuntu-server ubuntu-server
 
 This command explicitly specifies the Linux AMD64 platform for better compatibility when running on Mac with Docker Desktop or OrbStack.
 
+To setup connection between pgadmin and postgresql, go to [http://localhost:8080/browser/](http://localhost:8080/browser/), in pgadmin use these settings:
+```
+Host name/address: docker-arcgis-enterprise_postgres_1
+Port: 5432
+Username: {follow your env}
+Password: {follow your env}
+```
+
 ## One time authorisation
 
 Please refer to this [website](https://enterprise.arcgis.com/en/server/10.9.1/install/linux/silently-install-arcgis-server.htm) to do one time authorisation for your .prvc provisioning file, if you want to generate .ecp file for arcgis server.
