@@ -19,6 +19,8 @@ ESRI ArcGIS Enterprise running in Docker containers on Linux. This fork focuses 
 
 ## Quick Start
 
+### Build a base Docker image in AMD64
+
 When building the base ubuntu-server image, you must specify the platform:
 
 ```bash
@@ -27,12 +29,31 @@ docker buildx build --platform linux/amd64 -t ubuntu-server ubuntu-server
 
 This command explicitly specifies the Linux AMD64 platform for better compatibility when running on Mac with Docker Desktop or OrbStack.
 
+### Setup postgresql connection
+
 To setup connection between pgadmin and postgresql, go to [http://localhost:8080/browser/](http://localhost:8080/browser/), in pgadmin use these settings:
 ```
 Host name/address: docker-arcgis-enterprise_postgres_1
 Port: 5432
 Username: {follow your env}
 Password: {follow your env}
+```
+
+Go to the postgresql database interactive mode:
+```
+podman exec -it docker-arcgis-enterprise_postgres_1 psql -U postgres
+CREATE DATABASE arcgis_enterprise;
+\l # list databases
+\q # exit view list
+```
+
+Finally go to your ArcGIS Pro, create a sde file using following:
+```
+Platform: PostgreSQL
+Instance: 172.23.254.226,5432 # You need to know your wsl2 or ip address exposed from container
+Username: {follow your env}
+Password: {follow your env}
+Database: arcgis_enterprise
 ```
 
 ## One time authorisation
