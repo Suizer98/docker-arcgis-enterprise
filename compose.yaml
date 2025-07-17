@@ -150,6 +150,8 @@ services:
     ports:
       # Allow access to this database from our LAN
       - "5432:5432"
+    networks:
+      - arcgis_network
     volumes:
       - postgres_data:/var/lib/postgresql/data
     env_file: .env
@@ -170,3 +172,5 @@ services:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_USER}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
       PGADMIN_DISABLE_POSTFIX: 1
+    networks:
+      - arcgis_network
