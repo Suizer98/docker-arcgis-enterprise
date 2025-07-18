@@ -29,6 +29,19 @@ docker buildx build --platform linux/amd64 -t ubuntu-server ubuntu-server
 
 This command explicitly specifies the Linux AMD64 platform for better compatibility when running on Mac with Docker Desktop or OrbStack.
 
+### Nginx and Socat to solve port forwarding between portal and server
+
+I don't know what is the solution to configure portal, somehow it always keep redirect me to portal.local on window chrome browser.
+The reason why I use nginx is because on window wsl2, if let say my host machine don't have adminstrative right to apply `/etc/hosts`:
+```
+    127.0.0.1 portal portal.local
+    127.0.0.1 server server.local
+    127.0.0.1 datastore datastore.local
+```
+I can only do this on wsl2 machine. Then use nginx to port forwarding localhost:7443 to portal:7443. 
+
+For Socat, I use it to trick server local network stack to redirect localhost:6443 from server:6443 so it can talk to portal service, in order to complete the federation.
+
 ### Setup postgresql connection
 
 To setup connection between pgadmin and postgresql, go to [http://localhost:8080/browser/](http://localhost:8080/browser/), in pgadmin use these settings:
