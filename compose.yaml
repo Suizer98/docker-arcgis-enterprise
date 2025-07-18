@@ -1,10 +1,10 @@
 volumes:
-#
-# *_home volumes are the /home/arcgis directories
-# and the software for each service gets installed there.
-#
-# *_data volumes are where the data for each services gets stored.
-#
+  #
+  # *_home volumes are the /home/arcgis directories
+  # and the software for each service gets installed there.
+  #
+  # *_data volumes are where the data for each services gets stored.
+  #
   portal_home:
     name: arcgis_portal_home
   portal_data:
@@ -31,7 +31,7 @@ services:
     platform: linux/amd64
     image: arcgis-server
     hostname: ${GISSERVER}
-    build: 
+    build:
       context: ./server
       dockerfile: Dockerfile
     env_file: ./.env
@@ -42,8 +42,6 @@ services:
     ports:
       - "6080:6080"
       - "6443:6443"
-    networks:
-      - arcgis_network
     ulimits:
       nofile:
         soft: 70000
@@ -54,15 +52,12 @@ services:
     volumes:
       - ./Installers/ArcGISServer:/app/Installer:ro
       - ./Licenses/ArcGISServer.prvc:/app/server.prvc:ro
+      - ./Licenses/authorization.ecp:/app/server.ecp:ro
       - ./configurebasedeployment.properties:/app/configurebasedeployment.properties:rw
       - server_home:/home/arcgis:rw
       - server_data:/srv/directories:rw
-#      - server_config:/home/arcgis/server/usr/config-store
-#      - server_logs:/home/arcgis/server/usr/logs
-    # Uncomment the next three lines to work in a shell environment for debugging. (See exec_server)
-    #entrypoint: /bin/bash
-    #stdin_open: true
-    #tty: true
+    networks:
+      - arcgis_network
 
   portal:
     platform: linux/amd64
@@ -75,14 +70,12 @@ services:
     environment:
       - ESRI_VERSION=${ESRI_VERSION}
       - AGP_USERNAME=${USERNAME}
-      - AGP_PASSWORD=${PASSWORD} 
+      - AGP_PASSWORD=${PASSWORD}
       - PORTAL_CONTENT=/home/arcgis/content
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
     ports:
       - "7080:7080"
       - "7443:7443"
-    networks:
-      - arcgis_network
     ulimits:
       nofile:
         soft: 70000
@@ -95,20 +88,14 @@ services:
       - ./Licenses/ArcGISPortal.json:/app/portal_license.json:ro
       - portal_home:/home/arcgis:rw
       - portal_data:/home/arcgis/content:rw
-     #- portal_data:/home/arcgis/portal/usr/arcgisportal:rw
-    links:
-      - server
-      - datastore
-    # Uncomment the next three lines to work in a shell environment for debugging.
-#    entrypoint: /bin/bash
-#    stdin_open: true
-#    tty: true
+    networks:
+      - arcgis_network
 
   datastore:
     platform: linux/amd64
     image: arcgis-datastore
     hostname: ${DATASTORE}
-    build: 
+    build:
       context: ./datastore
       dockerfile: Dockerfile
     env_file: ./.env
@@ -116,12 +103,10 @@ services:
       - ESRI_VERSION=${ESRI_VERSION}
       - AGE_SERVER=${GISSERVER}
       - AGS_USERNAME=${USERNAME}
-      - AGS_PASSWORD=${PASSWORD} 
+      - AGS_PASSWORD=${PASSWORD}
     ports:
       - "2443:2443"
       - "9876:9876"
-    networks:
-      - arcgis_network
     ulimits:
       nofile:
         soft: 70000
@@ -132,14 +117,8 @@ services:
     volumes:
       - ./Installers/ArcGISDataStore_Linux:/app/Installer:ro
       - datastore_home:/home/arcgis:rw
-# where does this belong
-#      - datastore_data:/home/arcgis/?????:rw
-    links:
-      - server
-    # Uncomment the next three lines to work in a shell environment for debugging.
-    #entrypoint: /bin/bash
-    #stdin_open: true
-    #tty: true
+    networks:
+      - arcgis_network
 
   postgres:
     platform: linux/amd64
@@ -148,29 +127,36 @@ services:
       context: .
       dockerfile: Dockerfile.postgres
     ports:
-      # Allow access to this database from our LAN
       - "5432:5432"
-    networks:
-      - arcgis_network
     volumes:
       - postgres_data:/var/lib/postgresql/data
     env_file: .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    networks:
+      - arcgis_network
 
   pgadmin:
     platform: linux/amd64
     image: dpage/pgadmin4:latest
     ports:
-      - "8213:80"
+      - "8080:80"
     volumes:
-      # Session data, user files, config files, config database go here.
       - pgadmin_data:/var/lib/pgadmin
     env_file: .env
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_USER}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
       PGADMIN_DISABLE_POSTFIX: 1
+    networks:
+      - arcgis_network
+
+  nginx-proxy:
+    image: docker.io/library/nginx:alpine
+    ports:
+      - "8081:80"
+    volumes:
+      - ./nginx-proxy.conf:/etc/nginx/nginx.conf:ro
     networks:
       - arcgis_network
