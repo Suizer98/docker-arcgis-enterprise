@@ -39,7 +39,7 @@ services:
       - "6443:6443"
     volumes:
       - ./Installers/ArcGISServer:/app/Installer:ro
-      - ./Licenses/server.prvc:/app/server.prvc:ro
+      - ./Licenses/ArcGISServer.prvc:/app/server.prvc:ro
       - ./configurebasedeployment.properties:/app/configurebasedeployment.properties:rw
       - server_home:/home/arcgis:rw
       - server_data:/srv/directories:rw
@@ -61,15 +61,15 @@ services:
       - ESRI_VERSION=${ESRI_VERSION}
       - AGP_USERNAME=${USERNAME}
       - AGP_PASSWORD=${PASSWORD} 
-      - PORTAL_CONTENT=/srv/content
+      - PORTAL_CONTENT=/home/arcgis/content
     ports:
       - "7080:7080"
       - "7443:7443"
     volumes:
       - ./Installers/PortalForArcGIS:/app/Installer:ro
-      - ./Licenses/portal.json:/app/portal_license.json:ro
+      - ./Licenses/ArcGISPortal.json:/app/portal_license.json:ro
       - portal_home:/home/arcgis:rw
-      - portal_data:/home/arcgis/content:rw
+      - portal_data:/srv/content:rw
      #- portal_data:/home/arcgis/portal/usr/arcgisportal:rw
     links:
       - server
@@ -95,7 +95,7 @@ services:
       - "2443:2443"
       - "9876:9876"
     volumes:
-      - ./Installers/DataStore:/app/Installer:ro
+      - ./Installers/ArcGISDataStore_Linux:/app/Installer:ro
       - datastore_home:/home/arcgis:rw
 # where does this belong
 #      - datastore_data:/home/arcgis/?????:rw

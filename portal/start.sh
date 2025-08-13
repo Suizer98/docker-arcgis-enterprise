@@ -47,9 +47,10 @@ fi
 # possible to feed a properties file, for example see
 # ~/portal/tools/createportal/createportal.properties
 # Note that all of these arguments except -d are required, else the script fails 
-createportal.sh -fn Site -ln Admin \
+/home/arcgis/portal/tools/createportal/createportal.sh -fn Site -ln Admin \
 		-u ${AGP_USERNAME} -p ${AGP_PASSWORD} \
-		-e ${ADMIN_EMAIL} \
+		-e ${ADMIN_EMAIL:-admin@example.com} \
+		-qi 1 -qa "Singapore" \
 		-d ${PORTAL_CONTENT} \
 		-lf /app/portal_license.json
 

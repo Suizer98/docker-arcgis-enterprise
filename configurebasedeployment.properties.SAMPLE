@@ -27,7 +27,7 @@ WEBGIS_ADMIN_PASSWORD =samplepassword
 WEBGIS_ADMIN_PASSWORD_ENCRYPTED = false
 # E-mail address for initial administrator account
 # e.g username@domain.com
-WEBGIS_ADMIN_EMAIL =
+WEBGIS_ADMIN_EMAIL = sz.tey@esrisingapore.com.sg
 # This is the index of the secret question to retrieve a forgotten password.
 # The list of questions with their respective index numbers is as follows:
 # 1, What city were you born in ?

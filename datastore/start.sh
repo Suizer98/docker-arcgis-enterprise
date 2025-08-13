@@ -30,7 +30,7 @@ else
   /app/Installer/Setup -m silent --verbose -l yes -d /home
 fi
 
-DATASTORE_URL="https://${HOSTNAME}:2443/arcgis/"
+DATASTORE_URL="https://${HOSTNAME}:2443/arcgis/datastore"
 echo -n "Waiting for Datastore to start.. "
 sleep 10
 # --head = only header
@@ -98,4 +98,15 @@ GISSERVER_URL="https://${AGE_SERVER}:6443/arcgis/"
 # DataStore logs are boring, by the way.
 # Note there are many logs, this is the one for "server"
 #
-tail -f $LOGDIR/${HOSTNAME}/server/*.log
+# Wait a bit for logs to be created, then tail them
+sleep 5
+if [ -d "$LOGDIR/${HOSTNAME}/server" ] && [ "$(ls -A $LOGDIR/${HOSTNAME}/server/*.log 2>/dev/null)" ]; then
+  tail -f $LOGDIR/${HOSTNAME}/server/*.log
+else
+  echo "No log files found yet, waiting for them to be created..."
+  # Keep container running while waiting for logs
+  while [ ! -f "$LOGDIR/${HOSTNAME}/server"/*.log ]; do
+    sleep 10
+  done
+  tail -f $LOGDIR/${HOSTNAME}/server/*.log
+fi
