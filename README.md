@@ -29,18 +29,43 @@ docker buildx build --platform linux/amd64 -t ubuntu-server ubuntu-server
 
 This command explicitly specifies the Linux AMD64 platform for better compatibility when running on Mac with Docker Desktop or OrbStack.
 
-### Nginx and Socat to solve port forwarding between portal and server
+### Nginx possible?
 
-I don't know what is the solution to configure portal, somehow it always keep redirect me to portal.local on window chrome browser.
-The reason why I use nginx is because on window wsl2, if let say my host machine don't have adminstrative right to apply `/etc/hosts`:
-```
-    127.0.0.1 portal portal.local
-    127.0.0.1 server server.local
-    127.0.0.1 datastore datastore.local
-```
-I can only do this on wsl2 machine. Then use nginx to port forwarding localhost:7443 to portal:7443. 
+Currently, this deployment doesn't use Nginx as a reverse proxy. Here's why and how to add it if needed:
 
-For Socat, I use it to trick server local network stack to redirect localhost:6443 from server:6443 so it can talk to portal service, in order to complete the federation.
+#### Current Approach
+On Windows WSL2, we use direct hostname resolution through `/etc/hosts` entries:
+```
+127.0.0.1 portal portal.local
+127.0.0.1 server server.local
+127.0.0.1 datastore datastore.local
+```
+
+**Benefits:**
+- ✅ **Simpler setup** - No additional proxy layer
+- ✅ **Direct access** - Services communicate directly
+- ✅ **Easier debugging** - Direct container-to-container communication
+- ✅ **Single host deployment** - All services on one machine
+
+**Requirements:**
+- Administrative rights to modify `/etc/hosts` on both WSL2 and host machine
+- Services must be accessible on their respective ports
+
+#### Adding Nginx (Optional)
+If you want to add Nginx as a reverse proxy, can do something to `compose.yaml`:
+```yaml
+nginx:
+  image: nginx:alpine
+  ports:
+    - "80:80"
+    - "443:443"
+  volumes:
+    - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+  depends_on:
+    - portal
+    - server
+    - datastore
+```
 
 ### Setup postgresql connection
 
@@ -69,9 +94,39 @@ Password: {follow your env}
 Database: arcgis_enterprise
 ```
 
-## One time authorisation
+## Offline authorisation using `.ecp` file
 
 Please refer to this [website](https://enterprise.arcgis.com/en/server/10.9.1/install/linux/silently-install-arcgis-server.htm) to do one time authorisation for your .prvc provisioning file, if you want to generate .ecp file for arcgis server.
+
+## Troubleshooting
+
+### DataStore Validation Issues
+
+**Problem**: "Bad login user[ ]" error when validating relational data store.
+
+**Solution**: Add PostgreSQL access permissions for the actual database user:
+
+1. **Find the username** from the validation payload in Server Manager:
+   - Go to **Site > Data Stores** in Server Manager
+   - Click **"Validate"** on the relational data store
+   - Look at the error message for the connection string
+   - Extract the username from `"USER=username"` in the connectionString
+
+   ![Example Validation Error](docs/readme.png)
+
+2. **Add Server access** using the allowconnection tool:
+```bash
+docker exec docker-arcgis-enterprise-datastore-1 /home/arcgis/datastore/tools/allowconnection.sh "SERVER.LOCAL" "EXTRACTED_USERNAME"
+```
+
+**Example**: If you see `"USER=hsu_jr2ht"` in the error, run:
+```bash
+docker exec docker-arcgis-enterprise-datastore-1 /home/arcgis/datastore/tools/allowconnection.sh "SERVER.LOCAL" "hsu_jr2ht"
+```
+
+**Why**: Server needs access to DataStore's internal database users, not just admin user.
+
+**Reference**: [ESRI Community discussion](https://community.esri.com/t5/arcgis-enterprise-questions/data-store-not-validating/td-p/1071516)
 
 ## Original Repository
 
