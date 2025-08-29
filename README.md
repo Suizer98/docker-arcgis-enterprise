@@ -4,36 +4,29 @@
 
 Tech stacks:
 
-![Tech stacks](https://skillicons.dev/icons?i=docker,ubuntu,bash)
+![Tech stacks](https://skillicons.dev/icons?i=docker,windows,ubuntu,bash)
 
-## Changes in this fork
+## Changes in fork
 
-The main changes in this fork include:
+Enabling ESRI ArcGIS Enterprise to be run in Docker containers on Window WSL2 or MacOS (primarily OrbStack). This fork focuses on improving the undone job by resolving Datastore issue and setting up your own enterprise geodatabases using the Postgresql.
 
-- **Platform Compatibility**: Modified `compose.yaml` to specify Linux 64-bit platform for better compatibility across different systems
-- **Dockerfile Updates**: Updated `ubuntu-server/Dockerfile` to align with latest syntax
+## Building appropriate image as a start
 
-## What is this?
+### Docker image in AMD64
 
-ESRI ArcGIS Enterprise running in Docker containers on Linux. This fork focuses on improving platform compatibility and cross-system deployment, particularly for Docker/OrbStack on Mac systems.
-
-## Quick Start
-
-### Build a base Docker image in AMD64
-
-When building the base ubuntu-server image, you must specify the platform:
+When building the base ubuntu-server image on MacOS, you must specify the platform:
 
 ```bash
 docker buildx build --platform linux/amd64 -t ubuntu-server ubuntu-server
 ```
 
-This command explicitly specifies the Linux AMD64 platform for better compatibility when running on Mac with Docker Desktop or OrbStack.
+## Port forwarding between each containers
 
 ### Nginx possible?
 
 Currently, this deployment doesn't use Nginx as a reverse proxy. Here's why and how to add it if needed:
 
-#### Current Approach
+### Current Approach
 On Windows WSL2, we use direct hostname resolution through `/etc/hosts` entries:
 ```
 127.0.0.1 portal portal.local
@@ -41,58 +34,54 @@ On Windows WSL2, we use direct hostname resolution through `/etc/hosts` entries:
 127.0.0.1 datastore datastore.local
 ```
 
-**Benefits:**
-- ✅ **Simpler setup** - No additional proxy layer
-- ✅ **Direct access** - Services communicate directly
-- ✅ **Easier debugging** - Direct container-to-container communication
-- ✅ **Single host deployment** - All services on one machine
-
-**Requirements:**
 - Administrative rights to modify `/etc/hosts` on both WSL2 and host machine
 - Services must be accessible on their respective ports
 
-#### Adding Nginx (Optional)
-If you want to add Nginx as a reverse proxy, can do something to `compose.yaml`:
-```yaml
-nginx:
-  image: nginx:alpine
-  ports:
-    - "80:80"
-    - "443:443"
-  volumes:
-    - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-  depends_on:
-    - portal
-    - server
-    - datastore
-```
+## Setup enterprise geodatabases connection
 
-### Setup postgresql connection
+### Setup connection between pgadmin and postgresql
 
-To setup connection between pgadmin and postgresql, go to [http://localhost:8080/browser/](http://localhost:8080/browser/), in pgadmin use these settings:
+Go to [http://localhost:8080/browser/](http://localhost:8080/browser/), in pgadmin use these settings:
 ```
-Host name/address: docker-arcgis-enterprise_postgres_1
+Host name/address: postgres # docker container service name as defined in compose.yaml
 Port: 5432
-Username: {follow your env}
-Password: {follow your env}
+Username: {$POSTGRES_USER}
+Password: {$POSTGRES_PASSWORD}
+Save password?: On
 ```
 
-Go to the postgresql database interactive mode:
-```
-podman exec -it docker-arcgis-enterprise_postgres_1 psql -U postgres
-CREATE DATABASE arcgis_enterprise;
-\l # list databases
-\q # exit view list
-```
+### Preparing sde file
 
-Finally go to your ArcGIS Pro, create a sde file using following:
+Test databases are already created with the `init.sh` script, so just grab those variables and go to ArcGIS Pro and create a `.sde` file first.
+
+Go to your ArcGIS Pro, create a sde file using WSL2-IP, you can also use `localhost` or `127.0.0.1` for testing. But the caveat is when importing the sde to ArcGIS Server, it cannot recognise `localhost` which postgres port supposed to be exposed from outside, and also container name like `postgres`.
 ```
 Platform: PostgreSQL
-Instance: 172.23.254.226,5432 # You need to know your wsl2 or ip address exposed from container
-Username: {follow your env}
-Password: {follow your env}
+Instance: WSL2-IP,5432 # Must be comma, not semicolon
+Username: {$POSTGRES_USER}
+Password: {$POSTGRES_PASSWORD}
 Database: arcgis_enterprise
 ```
+After connected, right click the created sde and `enable enterprise geodatabase`. If you don't how to get the Authorisation file to be used on ArcGIS Pro interface, I highly recommend you to check step below.
+
+### Creating Enterprise Geodatabase with ArcPy
+
+1. First, locate the keygen inside the ArcGIS Server container:
+
+```bash
+# From WSL2, locate the keygen
+docker exec docker-arcgis-enterprise-server-1 find /home/arcgis -name "keygen" -type f
+```
+
+2. Since the keycodes file is inside the ArcGIS Server container, you need to copy it to a Windows-accessible location:
+
+```bash
+# From WSL2, copy keycodes to Windows Desktop
+docker cp docker-arcgis-enterprise-server-1:/home/arcgis/server/framework/runtime/.wine/drive_c/Program\ Files/ESRI/License11.4/sysgen/keycodes /mnt/c/Users/YOUR_USERNAME/Desktop/keycodes
+```
+3. Run script `create_enterprise_gdb.py` in postgres folder, you can rename the database name as you wish inside the script, I didn't implement variable pass in.
+
+4. After successful creation, create new database connection in ArcGIS Pro to generate the sde file.
 
 ## Offline authorisation using `.ecp` file
 
@@ -106,29 +95,36 @@ Please refer to this [website](https://enterprise.arcgis.com/en/server/10.9.1/in
 
 **Solution**: Add PostgreSQL access permissions for the actual database user:
 
-1. **Find the username** from the validation payload in Server Manager:
-   - Go to **Site > Data Stores** in Server Manager
-   - Click **"Validate"** on the relational data store
+1. Find the username from the validation payload in Server Manager:
+   - Go to `Site` > `Data Stores` in Server Manager
+   - Click `"Validate"` on the relational data store
    - Look at the error message for the connection string
    - Extract the username from `"USER=username"` in the connectionString
 
    ![Example Validation Error](docs/readme.png)
 
-2. **Add Server access** using the allowconnection tool:
-```bash
-docker exec docker-arcgis-enterprise-datastore-1 /home/arcgis/datastore/tools/allowconnection.sh "SERVER.LOCAL" "EXTRACTED_USERNAME"
-```
-
-**Example**: If you see `"USER=hsu_jr2ht"` in the error, run:
+2. Add Server access using the `allowconnection.sh` tool, from the screenshot we know that user trying to connect is `hsu_jr2ht`:
 ```bash
 docker exec docker-arcgis-enterprise-datastore-1 /home/arcgis/datastore/tools/allowconnection.sh "SERVER.LOCAL" "hsu_jr2ht"
 ```
 
-**Why**: Server needs access to DataStore's internal database users, not just admin user.
+Reference: [ESRI Community discussion](https://community.esri.com/t5/arcgis-enterprise-questions/data-store-not-validating/td-p/1071516)
 
-**Reference**: [ESRI Community discussion](https://community.esri.com/t5/arcgis-enterprise-questions/data-store-not-validating/td-p/1071516)
+### ST_GEOMETRY vs POSTGIS Spatial Type Issues
 
-## Original Repository
+**Problem**: Complete error message when using ST_GEOMETRY:
+```
+ERROR: Setup st_geometry library ArcGIS version does not match the expected version in use [Success] st_geometry library release expected: 1.30.4.10, found: 1.30.5.10
+Connected RDBMS instance is not setup for Esri spatial type configuration.
+ERROR 003425: Setup st_geometry library ArcGIS version does not match the expected version in use.
+Failed to execute (CreateEnterpriseGeodatabase)
+```
 
-For the original project and full documentation, please visit:
-https://github.com/Wildsong/docker-arcgis-enterprise
+**Solution**: Use POSTGIS instead of ST_GEOMETRY due to version mismatch:
+- Expected: 1.30.4.10
+- Found: 1.30.5.10
+
+In `create_enterprise_gdb.py`, replace value below to use:
+```python
+spatial_type="POSTGIS"  # Instead of "ST_GEOMETRY"
+```
