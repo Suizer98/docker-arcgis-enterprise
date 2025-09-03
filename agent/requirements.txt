@@ -1,0 +1,28 @@
+# Core FastAPI dependencies
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.6.0
+httpx>=0.26.0
+
+# Groq AI
+groq>=0.4.1
+
+# LangChain dependencies - use compatible versions
+langchain>=0.2.0
+langchain-core>=0.2.0
+langchain-groq>=0.0.1
+langchain-community>=0.2.0
+
+# MCP client for connecting to MCP server
+mcp>=1.0.0
+
+# Environment and utilities
+python-dotenv>=1.0.0
+python-multipart>=0.0.6
+
+# Logging
+structlog>=23.2.0
+
+# Development
+pytest>=7.4.3
+pytest-asyncio>=0.21.1

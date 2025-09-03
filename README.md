@@ -1,129 +1,87 @@
-# docker-arcgis-enterprise
+# Docker ArcGIS Enterprise with AI Agent
 
-> **Fork Notice**: This is a fork of the original [docker-arcgis-enterprise](https://github.com/Wildsong/docker-arcgis-enterprise) repository by Wildsong.
+> **AI-Powered ArcGIS Enterprise** - Natural language interaction with ArcGIS Enterprise using LangChain and MCP.
 
-Tech stacks:
+![Tech Stack](https://skillicons.dev/icons?i=docker,python,fastapi,postgresql,ubuntu)
 
-![Tech stacks](https://skillicons.dev/icons?i=docker,windows,ubuntu,bash)
+## Overview
 
-## Changes in fork
+Extends [docker-arcgis-enterprise](https://github.com/Wildsong/docker-arcgis-enterprise) with AI capabilities, enabling natural language queries to ArcGIS services through LangChain and MCP.
 
-Enabling ESRI ArcGIS Enterprise to be run in Docker containers on Window WSL2 or MacOS (primarily OrbStack). This fork focuses on improving the undone job by resolving Datastore issue and setting up your own enterprise geodatabases using the PostgreSQL.
+## Architecture
 
-## Building appropriate image as a start
+```mermaid
+graph TB
+    A[LangChain Agent] --> B[Groq LLM]
+    A --> C[MCP Server]
+    C --> D[ArcGIS REST API]
+    C --> E[ArcGIS Portal Token]
+    D --> F[ArcGIS Enterprise Server]
+```
 
-### Docker image in AMD64
+## Features
 
-When building the base ubuntu-server image on MacOS, you must specify the platform:
+- **Natural Language Queries**: Ask about ArcGIS services in plain English
+- **Service Discovery**: Automatically list and find services
+- **Service Details**: Get comprehensive service information
+- **Smart Matching**: Find services with partial names (e.g., "tourist" → "TouristAttractions")
+- **Multi-Service Support**: Handle MapServer and FeatureServer types
+
+## Quick Start
+
+### Setup
+```bash
+git clone https://www.github.com/Suizer98/docker-arcgis-enterprise.git
+cd docker-arcgis-enterprise
+cp sample.env .env
+# Edit .env with your credentials
+```
+
+### Start Services
+```bash
+docker-compose up -d
+```
+
+## Usage Examples
 
 ```bash
-docker buildx build --platform linux/amd64 -t ubuntu-server ubuntu-server
+# List services
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What services are available?"}'
+
+# Get service details
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Tell me about the leakhotspot service"}'
 ```
 
-## Port forwarding between each containers
+## Endpoints
 
-### Current Approach
-On Windows WSL2, we use direct hostname resolution through `/etc/hosts` entries:
-```
-127.0.0.1 portal portal.local
-127.0.0.1 server server.local
-127.0.0.1 datastore datastore.local
-```
+- **AI Agent**: http://localhost:8000/chat
+- **MCP Server**: http://localhost:8001
+- **ArcGIS Portal**: https://portal.local:7443
+- **ArcGIS Server**: https://server.local:6443
 
-You need to have administrative rights to modify `/etc/hosts` on both WSL2 and host machine.
-You may also explore to use Nginx reverse proxy.
+## Tech Stack
 
-## Setup enterprise geodatabases connection
+- **AI**: LangChain + Groq Llama 3.1 8B
+- **MCP**: FastAPI with Model Context Protocol
+- **ArcGIS**: Enterprise 11.4 (Server, Portal, DataStore)
+- **Database**: PostgreSQL with PostGIS
 
-### Setup connection between pgadmin and postgresql
+## Documentation
 
-Go to [http://localhost:8080/browser/](http://localhost:8080/browser/), in pgadmin use these settings:
-```
-Host name/address: postgres # docker container service name as defined in compose.yaml
-Port: 5432
-Username: {$POSTGRES_USER}
-Password: {$POSTGRES_PASSWORD}
-Save password?: On
-```
-
-### Preparing sde file
-
-Test databases are already created with the `init.sh` script, so just grab those variables and go to ArcGIS Pro and create a `.sde` file first.
-
-Go to your ArcGIS Pro, create a sde file using WSL2-IP, you can also use `localhost` or `127.0.0.1` for testing. But the caveat is when importing the sde to ArcGIS Server, it cannot recognise `localhost` which postgres port supposed to be exposed from outside, and also container name like `postgres`.
-```
-Platform: PostgreSQL
-Instance: WSL2-IP,5432 # Must be comma, not semicolon
-Username: {$POSTGRES_USER}
-Password: {$POSTGRES_PASSWORD}
-Database: arcgis_enterprise
-```
-After connected, right click the created sde and `enable enterprise geodatabase`. If you don't how to get the Authorisation file to be used on ArcGIS Pro interface, I highly recommend you to check step below.
-
-### Creating Enterprise Geodatabase with ArcPy
-
-1. First, locate the keygen inside the ArcGIS Server container:
-
-```bash
-# From WSL2, locate the keygen
-docker exec docker-arcgis-enterprise-server-1 find /home/arcgis -name "keygen" -type f
-```
-
-2. Since the keycodes file is inside the ArcGIS Server container, you need to copy it to a Windows-accessible location:
-
-```bash
-# From WSL2, copy keycodes to Windows Desktop
-docker cp docker-arcgis-enterprise-server-1:/home/arcgis/server/framework/runtime/.wine/drive_c/Program\ Files/ESRI/License11.4/sysgen/keycodes /mnt/c/Users/YOUR_USERNAME/Desktop/keycodes
-```
-3. Run script [`create_enterprise_gdb.py`](postgres/create_enterprise_gdb.py), you can rename the database name as you wish inside the script, I didn't implement variable pass in.
-
-4. After successful creation, create new database connection in ArcGIS Pro to generate the sde file.
+- **Original Setup**: [docs/README-original.md](docs/README-original.md)
+- **LangChain**: [python.langchain.com](https://python.langchain.com/)
+- **MCP**: [modelcontextprotocol.io](https://modelcontextprotocol.io/)
 
 ## Troubleshooting
 
-### DataStore Validation Issues
+- **Docker Issues**: Refer to [docs/README-backup.md](docs/README-backup.md) for detailed Docker setup and configuration
+- **General Troubleshooting**: See [docs/README-original.md](docs/README-original.md) for comprehensive troubleshooting guide
+- **ArcGIS Enterprise Setup**: Original documentation covers full ArcGIS Enterprise installation and configuration
 
-**Problem**: "Bad login user[ ]" error when validating relational data store.
+---
 
-**Solution**: Add PostgreSQL access permissions for the actual database user:
-
-1. Find the username from the validation payload in Server Manager:
-   - Go to `Site` > `Data Stores` in Server Manager
-   - Click `"Validate"` on the relational data store
-   - Look at the error message for the connection string
-   - Extract the username from `"USER=username"` in the connectionString
-
-   ![Example Validation Error](docs/readme.png)
-
-2. Add Server access using the `allowconnection.sh` tool, from the screenshot we know that user trying to connect is `hsu_jr2ht`:
-```bash
-docker exec docker-arcgis-enterprise-datastore-1 /home/arcgis/datastore/tools/allowconnection.sh "SERVER.LOCAL" "hsu_jr2ht"
-```
-
-Reference: [ESRI Community discussion](https://community.esri.com/t5/arcgis-enterprise-questions/data-store-not-validating/td-p/1071516)
-
-Note: DataStore spins up its own PostgreSQL instance, this is different from the PostGIS issue below.
-
-### Onboarding self hosted PostgreSQL as an enterprise GDB
-
-**Problem**: `st_geometry.so` downloaded from MyESRI is not compatible with ArcGIS Server version.
-
-```
-ERROR: Setup st_geometry library ArcGIS version does not match the expected version in use [Success] st_geometry library release expected: 1.30.4.10, found: 1.30.5.10
-Connected RDBMS instance is not setup for Esri spatial type configuration.
-ERROR 003425: Setup st_geometry library ArcGIS version does not match the expected version in use.
-Failed to execute (CreateEnterpriseGeodatabase)
-```
-
-**Solution**: Use POSTGIS instead of ST_GEOMETRY due to version mismatch:
-- Expected: 1.30.4.10
-- Found: 1.30.5.10
-
-In [`create_enterprise_gdb.py`](postgres/create_enterprise_gdb.py), replace value below to use:
-```python
-spatial_type="POSTGIS"  # Instead of "ST_GEOMETRY"
-```
-
-## Offline authorisation using `.ecp` file
-
-You may refer to this [website](https://enterprise.arcgis.com/en/server/10.9.1/install/linux/silently-install-arcgis-server.htm) to convert your `.prvc` into `.ecp` file for arcgis server, if this is required for air-gapped or internet isolated environment.
+**Ready to explore ArcGIS Enterprise with AI?** 🚀

@@ -1,0 +1,21 @@
+# FastAPI dependencies - updated versions for compatibility
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.6.0
+
+# FastAPI-MCP for MCP protocol compliance
+fastapi-mcp
+
+# HTTP client for ArcGIS API calls
+httpx>=0.26.0
+
+# Environment and utilities
+python-dotenv>=1.0.0
+python-multipart>=0.0.6
+
+# Logging
+structlog>=23.2.0
+
+# Development
+pytest>=7.4.3
+pytest-asyncio>=0.21.1
