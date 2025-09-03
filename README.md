@@ -8,7 +8,7 @@ Tech stacks:
 
 ## Changes in fork
 
-Enabling ESRI ArcGIS Enterprise to be run in Docker containers on Window WSL2 or MacOS (primarily OrbStack). This fork focuses on improving the undone job by resolving Datastore issue and setting up your own enterprise geodatabases using the Postgresql.
+Enabling ESRI ArcGIS Enterprise to be run in Docker containers on Window WSL2 or MacOS (primarily OrbStack). This fork focuses on improving the undone job by resolving Datastore issue and setting up your own enterprise geodatabases using the PostgreSQL.
 
 ## Building appropriate image as a start
 
@@ -22,10 +22,6 @@ docker buildx build --platform linux/amd64 -t ubuntu-server ubuntu-server
 
 ## Port forwarding between each containers
 
-### Nginx possible?
-
-Currently, this deployment doesn't use Nginx as a reverse proxy. Here's why and how to add it if needed:
-
 ### Current Approach
 On Windows WSL2, we use direct hostname resolution through `/etc/hosts` entries:
 ```
@@ -34,8 +30,8 @@ On Windows WSL2, we use direct hostname resolution through `/etc/hosts` entries:
 127.0.0.1 datastore datastore.local
 ```
 
-- Administrative rights to modify `/etc/hosts` on both WSL2 and host machine
-- Services must be accessible on their respective ports
+You need to have administrative rights to modify `/etc/hosts` on both WSL2 and host machine.
+You may also explore to use Nginx reverse proxy.
 
 ## Setup enterprise geodatabases connection
 
@@ -79,13 +75,9 @@ docker exec docker-arcgis-enterprise-server-1 find /home/arcgis -name "keygen" -
 # From WSL2, copy keycodes to Windows Desktop
 docker cp docker-arcgis-enterprise-server-1:/home/arcgis/server/framework/runtime/.wine/drive_c/Program\ Files/ESRI/License11.4/sysgen/keycodes /mnt/c/Users/YOUR_USERNAME/Desktop/keycodes
 ```
-3. Run script `create_enterprise_gdb.py` in postgres folder, you can rename the database name as you wish inside the script, I didn't implement variable pass in.
+3. Run script [`create_enterprise_gdb.py`](postgres/create_enterprise_gdb.py), you can rename the database name as you wish inside the script, I didn't implement variable pass in.
 
 4. After successful creation, create new database connection in ArcGIS Pro to generate the sde file.
-
-## Offline authorisation using `.ecp` file
-
-Please refer to this [website](https://enterprise.arcgis.com/en/server/10.9.1/install/linux/silently-install-arcgis-server.htm) to do one time authorisation for your .prvc provisioning file, if you want to generate .ecp file for arcgis server.
 
 ## Troubleshooting
 
@@ -110,9 +102,12 @@ docker exec docker-arcgis-enterprise-datastore-1 /home/arcgis/datastore/tools/al
 
 Reference: [ESRI Community discussion](https://community.esri.com/t5/arcgis-enterprise-questions/data-store-not-validating/td-p/1071516)
 
-### ST_GEOMETRY vs POSTGIS Spatial Type Issues
+Note: DataStore spins up its own PostgreSQL instance, this is different from the PostGIS issue below.
 
-**Problem**: Complete error message when using ST_GEOMETRY:
+### Onboarding self hosted PostgreSQL as an enterprise GDB
+
+**Problem**: `st_geometry.so` downloaded from MyESRI is not compatible with ArcGIS Server version.
+
 ```
 ERROR: Setup st_geometry library ArcGIS version does not match the expected version in use [Success] st_geometry library release expected: 1.30.4.10, found: 1.30.5.10
 Connected RDBMS instance is not setup for Esri spatial type configuration.
@@ -124,7 +119,11 @@ Failed to execute (CreateEnterpriseGeodatabase)
 - Expected: 1.30.4.10
 - Found: 1.30.5.10
 
-In `create_enterprise_gdb.py`, replace value below to use:
+In [`create_enterprise_gdb.py`](postgres/create_enterprise_gdb.py), replace value below to use:
 ```python
 spatial_type="POSTGIS"  # Instead of "ST_GEOMETRY"
 ```
+
+## Offline authorisation using `.ecp` file
+
+You may refer to this [website](https://enterprise.arcgis.com/en/server/10.9.1/install/linux/silently-install-arcgis-server.htm) to convert your `.prvc` into `.ecp` file for arcgis server, if this is required for air-gapped or internet isolated environment.
