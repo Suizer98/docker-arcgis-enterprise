@@ -53,7 +53,8 @@ async def root():
         "framework": "LangChain + MCP",
         "endpoints": {
             "chat": "/chat",
-            "health": "/health"
+            "health": "/health",
+            "tools": "/tools"
         }
     }
 

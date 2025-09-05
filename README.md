@@ -34,6 +34,7 @@ For docker ArcGIS Enterprise setup please refer to the [References](#references)
 git clone https://www.github.com/Suizer98/docker-arcgis-enterprise.git
 cd docker-arcgis-enterprise
 cp sample.env .env
+cp configurebasedeployment.properties.SAMPLE configurebasedeployment.properties
 docker-compose up -d
 ```
 
