@@ -6,7 +6,7 @@
 
 ## Overview
 
-Extends [docker-arcgis-enterprise](https://github.com/Wildsong/docker-arcgis-enterprise) with AI capabilities, enabling natural language queries to ArcGIS services through LangChain and MCP.
+Extends [docker-arcgis-enterprise](https://github.com/Wildsong/docker-arcgis-enterprise) with AI capabilities, enabling natural language queries to ArcGIS services through LangChain and MCP powered by FastAPI.
 
 ## Architecture
 
@@ -23,22 +23,17 @@ graph TB
 
 - **Natural Language Queries**: Ask about ArcGIS services in plain English
 - **Service Discovery**: Automatically list and find services
-- **Service Details**: Get comprehensive service information
-- **Smart Matching**: Find services with partial names (e.g., "tourist" → "TouristAttractions")
-- **Multi-Service Support**: Handle MapServer and FeatureServer types
+- **Service Details**: Get comprehensive published service information
 
 ## Quick Start
 
 ### Setup
+For docker ArcGIS Enterprise setup please refer to the [References](#references) section below.
+
 ```bash
 git clone https://www.github.com/Suizer98/docker-arcgis-enterprise.git
 cd docker-arcgis-enterprise
 cp sample.env .env
-# Edit .env with your credentials
-```
-
-### Start Services
-```bash
 docker-compose up -d
 ```
 
@@ -48,12 +43,12 @@ docker-compose up -d
 # List services
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
-  -d '{"message": "What services are available?"}'
+  -d '{"message": "What services are available in ArcGIS Server?"}'
 
 # Get service details
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
-  -d '{"message": "Tell me about the leakhotspot service"}'
+  -d '{"message": "Is there a service called TouristAttractions?"}'
 ```
 
 ## Endpoints
@@ -68,7 +63,7 @@ curl -X POST http://localhost:8000/chat \
 - **AI**: LangChain + Groq Llama 3.1 8B
 - **MCP**: FastAPI with Model Context Protocol
 - **ArcGIS**: Enterprise 11.4 (Server, Portal, DataStore)
-- **Database**: PostgreSQL with PostGIS
+- **Database**: PostgreSQL with PostGIS extension
 
 ## Documentation
 
@@ -76,9 +71,9 @@ curl -X POST http://localhost:8000/chat \
 - **LangChain**: [python.langchain.com](https://python.langchain.com/)
 - **MCP**: [modelcontextprotocol.io](https://modelcontextprotocol.io/)
 
-## Troubleshooting
+## References
 
-- **Docker Issues**: Refer to [docs/README-backup.md](docs/README-backup.md) for detailed Docker setup and configuration
+- **Docker Issues**: Refer to [docs/README.md](docs/README.md) for detailed Docker setup and configuration
 - **General Troubleshooting**: See [docs/README-original.md](docs/README-original.md) for comprehensive troubleshooting guide
 - **ArcGIS Enterprise Setup**: Original documentation covers full ArcGIS Enterprise installation and configuration
 
