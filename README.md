@@ -21,9 +21,10 @@ graph TB
 
 ## Features
 
-- **Natural Language Queries**: Ask about ArcGIS services in plain English
-- **Service Discovery**: Automatically list and find services
-- **Service Details**: Get comprehensive published service information
+- **Natural Language Queries**: Ask about ArcGIS services like a chatbot
+- **Service Discovery**: Automatically list and find hosted services
+- **Service Details**: Get published service information like layers and extents
+- **Query Layer**: Query layer with parameters such as record counts
 
 ## Quick Start
 
@@ -34,6 +35,7 @@ For docker ArcGIS Enterprise setup please refer to the [References](#references)
 git clone https://www.github.com/Suizer98/docker-arcgis-enterprise.git
 cd docker-arcgis-enterprise
 cp sample.env .env
+cp configurebasedeployment.properties.SAMPLE configurebasedeployment.properties
 docker-compose up -d
 ```
 
@@ -60,23 +62,15 @@ curl -X POST http://localhost:8000/chat \
 
 ## Tech Stack
 
-- **AI**: LangChain + Groq Llama 3.1 8B
+- **LLM Agent**: LangChain + Groq Llama 3.1 8B
 - **MCP**: FastAPI with Model Context Protocol
 - **ArcGIS**: Enterprise 11.4 (Server, Portal, DataStore)
 - **Database**: PostgreSQL with PostGIS extension
 
-## Documentation
-
-- **Original Setup**: [docs/README-original.md](docs/README-original.md)
-- **LangChain**: [python.langchain.com](https://python.langchain.com/)
-- **MCP**: [modelcontextprotocol.io](https://modelcontextprotocol.io/)
-
 ## References
 
-- **Docker Issues**: Refer to [docs/README.md](docs/README.md) for detailed Docker setup and configuration
-- **General Troubleshooting**: See [docs/README-original.md](docs/README-original.md) for comprehensive troubleshooting guide
-- **ArcGIS Enterprise Setup**: Original documentation covers full ArcGIS Enterprise installation and configuration
-
+- **Docker Issues**: Refer to [docs/README.md](docs/README.md) for detailed Docker setup, configuration and troubleshooting
+- **General Troubleshooting**: See [docs/README-original.md](docs/README-original.md) for Wildsong's comprehensive explainations
 ---
 
 **Ready to explore ArcGIS Enterprise with AI?** 🚀

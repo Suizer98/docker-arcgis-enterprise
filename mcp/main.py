@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Pydantic models for API
 class ListServicesRequest(BaseModel):
-    pass  # No parameters needed - always return all services
+    pass
 
 class GetServiceDetailsRequest(BaseModel):
     service_name: str

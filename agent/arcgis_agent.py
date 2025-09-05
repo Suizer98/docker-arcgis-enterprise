@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
 
@@ -17,12 +18,14 @@ from prompts import get_system_prompt, get_simple_system_prompt
 
 # Configuration
 MODEL_NAME = "llama-3.1-8b-instant"
+MAX_TOKENS_PER_REQUEST = 6000  # Groq's 6000 TPM limit
+TOKEN_ESTIMATION_RATIO = 1.3  # 1 token ≈ 0.75 characters
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class ArcGISLangChainAgent:
-    def __init__(self, memory_window_size: int = 10):
+    def __init__(self, memory_window_size: int = 5):
         self.groq_client = ChatGroq(
             model=MODEL_NAME,
             api_key=os.getenv("GROQ_API_KEY"),
@@ -34,7 +37,7 @@ class ArcGISLangChainAgent:
             raise ValueError("MCP_SERVER_URL environment variable is required")
         self.mcp_session = None
         
-        # Memory configuration
+        # Memory configuration with token awareness
         self.memory_window_size = memory_window_size
         self.memory = ConversationBufferWindowMemory(
             k=memory_window_size,
@@ -48,6 +51,22 @@ class ArcGISLangChainAgent:
         self._initialized = False
         self.function_info = {}  # Store function info from MCP server
         self.current_tools_used = []  # Track tools used in current request
+    
+    def _estimate_tokens(self, text: str) -> int:
+        """Simple token estimation"""
+        return int(len(text) * TOKEN_ESTIMATION_RATIO) if text else 0
+    
+    def _trim_memory(self):
+        """Trim memory to prevent token limit issues"""
+        messages = self.memory.chat_memory.messages
+        if len(messages) > 4:  # Keep only last 2 conversation pairs
+            self.memory.chat_memory.messages = messages[-4:]
+            logger.info(f"Memory trimmed to {len(self.memory.chat_memory.messages)} messages")
+    
+    def _handle_token_limit_error(self):
+        """Handle token limit exceeded errors"""
+        logger.warning("Token limit exceeded, trimming memory")
+        self._trim_memory()
     
     async def _initialize(self):
         """Initialize the agent with dynamic tools from MCP server"""
@@ -354,10 +373,13 @@ class ArcGISLangChainAgent:
             else:
                 self.current_tools_used = []
             
-            try:
-                # Get conversation history from memory
+            # Simple memory management
+            chat_history = self.memory.chat_memory.messages
+            if len(chat_history) > 6:  # Trim if more than 3 conversation pairs
+                self._trim_memory()
                 chat_history = self.memory.chat_memory.messages
-                
+            
+            try:
                 # Add memory context to the input
                 input_data = {
                     "input": message,
@@ -397,16 +419,32 @@ class ArcGISLangChainAgent:
                     {"output": output}
                 )
                 
-            except Exception as agent_error:
-                logger.error(f"Agent execution error: {agent_error}")
-                output = f"I encountered an error while processing your request: {str(agent_error)}. Please try rephrasing your question."
-                tools_used = self.current_tools_used.copy()
                 
-                # Save the error to memory as well
-                self.memory.save_context(
-                    {"input": message},
-                    {"output": output}
-                )
+            except Exception as agent_error:
+                error_str = str(agent_error)
+                logger.error(f"Agent execution error: {agent_error}")
+                
+                # Check if this is a token limit error
+                if "Request too large" in error_str or "tokens per minute" in error_str or "rate_limit_exceeded" in error_str:
+                    self._handle_token_limit_error()
+                    output = "I encountered a token limit error and cleared some conversation history. Please try your question again."
+                    tools_used = self.current_tools_used.copy()
+                    
+                    # Save the error to memory
+                    self.memory.save_context(
+                        {"input": message},
+                        {"output": output}
+                    )
+                else:
+                    # Regular error handling
+                    output = f"I encountered an error while processing your request: {str(agent_error)}. Please try rephrasing your question."
+                    tools_used = self.current_tools_used.copy()
+                    
+                    # Save the error to memory as well
+                    self.memory.save_context(
+                        {"input": message},
+                        {"output": output}
+                    )
             
             return {
                 "message": output,
@@ -416,7 +454,8 @@ class ArcGISLangChainAgent:
                     "model": MODEL_NAME,
                     "framework": "langchain + dynamic mcp + memory",
                     "tools_discovered": len(self.tools),
-                    "memory_window_size": self.memory_window_size
+                    "memory_window_size": self.memory_window_size,
+                    "estimated_tokens": sum(self._estimate_tokens(msg.content) for msg in self.memory.chat_memory.messages if hasattr(msg, 'content') and msg.content)
                 }
             }
             
@@ -451,11 +490,15 @@ class ArcGISLangChainAgent:
     def get_memory_summary(self) -> Dict[str, Any]:
         """Get a summary of the current memory state"""
         messages = self.memory.chat_memory.messages
+        estimated_tokens = self._estimate_conversation_tokens(messages)
         return {
             "total_messages": len(messages),
             "conversation_pairs": len(messages) // 2,
             "memory_window_size": self.memory_window_size,
-            "memory_usage_percentage": (len(messages) / (self.memory_window_size * 2)) * 100
+            "memory_usage_percentage": (len(messages) / (self.memory_window_size * 2)) * 100,
+            "estimated_tokens": estimated_tokens,
+            "token_usage_percentage": (estimated_tokens / MAX_TOKENS_PER_REQUEST) * 100,
+            "token_limit_exceeded_count": self.token_limit_exceeded_count
         }
     
     def set_memory_window_size(self, new_size: int):
@@ -467,3 +510,4 @@ class ArcGISLangChainAgent:
             return_messages=True
         )
         logger.info(f"Memory window size updated to {new_size}")
+    
