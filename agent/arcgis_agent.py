@@ -15,13 +15,16 @@ from langchain.agents import AgentExecutor, create_tool_calling_agent
 
 from prompts import get_system_prompt, get_simple_system_prompt
 
+# Configuration
+MODEL_NAME = "llama-3.1-8b-instant"
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class ArcGISLangChainAgent:
     def __init__(self, memory_window_size: int = 10):
         self.groq_client = ChatGroq(
-            model="llama-3.1-8b-instant",
+            model=MODEL_NAME,
             api_key=os.getenv("GROQ_API_KEY"),
             temperature=0.7
         )
@@ -95,6 +98,9 @@ class ArcGISLangChainAgent:
                 if function_info["name"] not in self.current_tools_used:
                     self.current_tools_used.append(function_info["name"])
                 logger.info(f"Calling tool {function_info['name']} with args: {kwargs}")
+                logger.info(f"Args type: {type(kwargs)}, Args content: {kwargs}")
+                logger.info(f"Args keys: {list(kwargs.keys()) if kwargs else 'None'}")
+                logger.info(f"Args values: {list(kwargs.values()) if kwargs else 'None'}")
                 result = asyncio.run(self._call_mcp_tool_dynamic(function_info["name"], kwargs))
                 logger.info(f"Tool {function_info['name']} result: {result[:200]}...")
                 return result
@@ -121,6 +127,10 @@ class ArcGISLangChainAgent:
                     field_type = bool
                 elif param_type == "integer":
                     field_type = int
+                elif param_type == "array":
+                    field_type = List[Any]
+                elif param_type == "object":
+                    field_type = Dict[str, Any]
                 else:
                     field_type = str
                 
@@ -129,28 +139,30 @@ class ArcGISLangChainAgent:
                     fields[param_name] = Field(description=param_description)
                     annotations[param_name] = field_type
                 else:
-                    # For optional parameters, use Optional type and provide default
+                    # For optional parameters, always use Optional type
+                    annotations[param_name] = Optional[field_type]
+                    
+                    # Set appropriate defaults based on type and provided default
                     if param_default is not None:
                         fields[param_name] = Field(default=param_default, description=param_description)
-                        annotations[param_name] = Optional[field_type]
                     else:
-                        # For optional parameters without explicit default, use None as default
+                        # For optional parameters without explicit default, use sensible defaults
                         if field_type == bool:
                             fields[param_name] = Field(default=False, description=param_description)
-                            annotations[param_name] = Optional[field_type]
                         elif field_type == int:
                             fields[param_name] = Field(default=0, description=param_description)
-                            annotations[param_name] = Optional[field_type]
-                        else:
+                        elif field_type == str:
                             fields[param_name] = Field(default="", description=param_description)
-                            annotations[param_name] = Optional[field_type]
+                        else:
+                            # For complex types like arrays and objects, use None as default
+                            fields[param_name] = Field(default=None, description=param_description)
             
             # Create the dynamic model
             class DynamicToolInput(BaseModel):
                 __annotations__ = annotations
                 
                 class Config:
-                    extra = "ignore"
+                    extra = "ignore"  # Ignore extra fields instead of allowing them
             
             # Add the fields to the model
             for field_name, field_def in fields.items():
@@ -161,11 +173,76 @@ class ArcGISLangChainAgent:
                 class Config:
                     extra = "ignore"
         
+        # Create a dynamic schema based on the function parameters from MCP
+        parameters = function_info.get("parameters", {})
+        
+        if parameters:
+            # Create a dynamic model with the correct field names and types
+            fields = {}
+            annotations = {}
+            
+            for param_name, param_info in parameters.items():
+                param_type = param_info.get("type", "string")
+                param_required = param_info.get("required", False)
+                param_default = param_info.get("default")
+                
+                # Convert type string to Python type
+                if param_type == "boolean":
+                    field_type = bool
+                elif param_type == "integer":
+                    field_type = int
+                elif param_type == "array":
+                    field_type = List[Any]
+                elif param_type == "object":
+                    field_type = Dict[str, Any]
+                else:
+                    field_type = str
+                
+                # Create field with proper default handling
+                if param_required:
+                    fields[param_name] = Field(description=param_info.get("description", f"Parameter {param_name}"))
+                    annotations[param_name] = field_type
+                else:
+                    # For optional parameters, use Optional type
+                    annotations[param_name] = Optional[field_type]
+                    
+                    # Set appropriate defaults
+                    if param_default is not None:
+                        fields[param_name] = Field(default=param_default, description=param_info.get("description", f"Parameter {param_name}"))
+                    else:
+                        # Use sensible defaults based on type
+                        if field_type == bool:
+                            fields[param_name] = Field(default=False, description=param_info.get("description", f"Parameter {param_name}"))
+                        elif field_type == int:
+                            fields[param_name] = Field(default=0, description=param_info.get("description", f"Parameter {param_name}"))
+                        elif field_type == str:
+                            fields[param_name] = Field(default="", description=param_info.get("description", f"Parameter {param_name}"))
+                        else:
+                            fields[param_name] = Field(default=None, description=param_info.get("description", f"Parameter {param_name}"))
+            
+            # Create the dynamic model
+            class DynamicToolInput(BaseModel):
+                __annotations__ = annotations
+                
+                class Config:
+                    extra = "ignore"  # Ignore extra fields
+            
+            # Add the fields to the model
+            for field_name, field_def in fields.items():
+                setattr(DynamicToolInput, field_name, field_def)
+            
+            schema = DynamicToolInput
+        else:
+            # No parameters, create empty model
+            class EmptyInput(BaseModel):
+                pass
+            schema = EmptyInput
+        
         return StructuredTool.from_function(
             func=dynamic_tool_func,
             name=function_info["name"],
             description=function_info.get("description", f"Call {function_info['name']}"),
-            args_schema=DynamicToolInput
+            args_schema=schema
         )
 
     async def _call_mcp_tool_dynamic(self, function_name: str, arguments: dict = None) -> str:
@@ -190,7 +267,9 @@ class ArcGISLangChainAgent:
                 if method.upper() == "GET":
                     response = await client.get(url)
                 else:
-                    response = await client.post(url, json=arguments if arguments else {})
+                    # Ensure we always send a JSON body, even if arguments is None
+                    request_body = arguments if arguments is not None else {}
+                    response = await client.post(url, json=request_body)
                 
                 logger.info(f"Response status: {response.status_code}")
                 
@@ -249,10 +328,10 @@ class ArcGISLangChainAgent:
         return AgentExecutor(
             agent=agent,
             tools=self.tools,
-            memory=self.memory,
             verbose=True,
             handle_parsing_errors=True,
-            max_iterations=5
+            max_iterations=5,
+            return_intermediate_steps=True
         )
     
     def _create_simple_chain(self):
@@ -276,10 +355,13 @@ class ArcGISLangChainAgent:
                 self.current_tools_used = []
             
             try:
+                # Get conversation history from memory
+                chat_history = self.memory.chat_memory.messages
+                
                 # Add memory context to the input
                 input_data = {
                     "input": message,
-                    "chat_history": self.memory.chat_memory.messages
+                    "chat_history": chat_history
                 }
                 
                 result = await self.agent_executor.ainvoke(input_data)
@@ -331,7 +413,7 @@ class ArcGISLangChainAgent:
                 "session_id": self.session_id,
                 "tools_used": tools_used,
                 "metadata": {
-                    "model": "llama-3.1-8b-instant",
+                    "model": MODEL_NAME,
                     "framework": "langchain + dynamic mcp + memory",
                     "tools_discovered": len(self.tools),
                     "memory_window_size": self.memory_window_size

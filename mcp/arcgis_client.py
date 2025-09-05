@@ -317,3 +317,224 @@ class ArcGISClient:
             "credentials_configured": bool(self.username and self.password),
             "token_available": bool(self.portal_token)
         }
+    
+    async def query_service_layer(self, 
+                                service_name: str, 
+                                folder: str = "", 
+                                layer_id: Optional[int] = 0,
+                                where: str = "1=1",
+                                object_ids: Optional[List[int]] = None,
+                                geometry: Optional[Dict[str, Any]] = None,
+                                geometry_type: Optional[str] = "esriGeometryEnvelope",
+                                spatial_rel: Optional[str] = "esriSpatialRelIntersects",
+                                out_fields: str = "*",
+                                return_geometry: bool = True,
+                                return_ids_only: bool = False,
+                                return_count_only: bool = False,
+                                order_by_fields: Optional[str] = None,
+                                group_by_fields_for_statistics: Optional[str] = None,
+                                out_statistics: Optional[List[Dict[str, Any]]] = None,
+                                result_offset: Optional[int] = None,
+                                result_record_count: Optional[int] = None,
+                                return_distinct_values: bool = False,
+                                return_extent_only: bool = False,
+                                max_record_count: Optional[int] = 1000) -> Dict[str, Any]:
+        """
+        Query a service layer with flexible parameters
+        
+        Args:
+            service_name: Name of the service
+            folder: Folder containing the service (empty string for root)
+            layer_id: Layer ID to query (default: 0)
+            where: SQL WHERE clause (default: "1=1" for all records)
+            object_ids: List of specific object IDs to query
+            geometry: Geometry for spatial query (dict with coordinates and spatial reference)
+            geometry_type: Type of geometry (esriGeometryEnvelope, esriGeometryPoint, etc.)
+            spatial_rel: Spatial relationship (esriSpatialRelIntersects, esriSpatialRelContains, etc.)
+            out_fields: Comma-separated list of fields to return (default: "*")
+            return_geometry: Whether to return geometry (default: True)
+            return_ids_only: Return only object IDs (default: False)
+            return_count_only: Return only count (default: False)
+            order_by_fields: Fields to order by (e.g., "FIELD_NAME ASC")
+            group_by_fields_for_statistics: Fields to group by for statistics
+            out_statistics: List of statistics to calculate
+            result_offset: Number of records to skip
+            result_record_count: Maximum number of records to return
+            return_distinct_values: Return only distinct values (default: False)
+            return_extent_only: Return only extent (default: False)
+            max_record_count: Maximum record count (default: 1000)
+        """
+        try:
+            # Handle None values by providing defaults
+            if layer_id is None:
+                layer_id = 0
+            if geometry_type is None:
+                geometry_type = "esriGeometryEnvelope"
+            if spatial_rel is None:
+                spatial_rel = "esriSpatialRelIntersects"
+            if max_record_count is None:
+                max_record_count = 1000
+            
+            # First, get the service details to determine the correct service type
+            service_details = await self.get_service_details(service_name, folder)
+            if "error" in service_details:
+                return service_details
+            
+            # Extract service metadata
+            service_metadata = service_details.get("service_metadata", {})
+            actual_service_name = service_metadata.get("name", service_name)
+            actual_folder = service_metadata.get("folder", folder)
+            service_type = service_metadata.get("type", "MapServer")
+            
+            # Construct the query endpoint
+            if actual_folder:
+                query_endpoint = f"{actual_folder}/{actual_service_name}/{service_type}/{layer_id}/query"
+            else:
+                query_endpoint = f"{actual_service_name}/{service_type}/{layer_id}/query"
+            
+            # Build query parameters
+            query_params = {
+                "f": "json",
+                "where": where if where else "1=1",  # Use "1=1" for all records if where is empty
+                "outFields": out_fields,
+                "returnGeometry": str(return_geometry).lower(),
+                "returnIdsOnly": str(return_ids_only).lower(),
+                "returnCountOnly": str(return_count_only).lower(),
+                "returnDistinctValues": str(return_distinct_values).lower(),
+                "returnExtentOnly": str(return_extent_only).lower()
+            }
+            
+            # Set record count limit - prefer result_record_count if provided
+            if result_record_count is not None and result_record_count > 0:
+                query_params["resultRecordCount"] = str(result_record_count)
+            else:
+                query_params["maxRecordCount"] = str(max_record_count)
+            
+            # Add object IDs if provided
+            if object_ids:
+                query_params["objectIds"] = ",".join(map(str, object_ids))
+            
+            # Add geometry for spatial query if provided
+            if geometry:
+                query_params["geometry"] = json.dumps(geometry)
+                query_params["geometryType"] = geometry_type
+                query_params["spatialRel"] = spatial_rel
+            
+            # Add ordering if provided
+            if order_by_fields:
+                query_params["orderByFields"] = order_by_fields
+            
+            # Add grouping for statistics if provided
+            if group_by_fields_for_statistics:
+                query_params["groupByFieldsForStatistics"] = group_by_fields_for_statistics
+            
+            # Add statistics if provided
+            if out_statistics:
+                query_params["outStatistics"] = json.dumps(out_statistics)
+            
+            # Add result offset if provided
+            if result_offset is not None and result_offset > 0:
+                query_params["resultOffset"] = str(result_offset)
+            
+            # Make the query request
+            async with httpx.AsyncClient(verify=False, timeout=30.0, follow_redirects=True) as client:
+                # Ensure we have a valid token
+                await self._ensure_valid_token()
+                
+                url = f"{self.server_url}/{query_endpoint}"
+                if self.portal_token:
+                    query_params["token"] = self.portal_token
+                
+                logger.info(f"Querying service layer: {query_endpoint}")
+                logger.info(f"Query parameters: {query_params}")
+                
+                response = await client.get(url, params=query_params)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    # Add query metadata to the result
+                    result["query_metadata"] = {
+                        "service_name": actual_service_name,
+                        "folder": actual_folder,
+                        "service_type": service_type,
+                        "layer_id": layer_id,
+                        "query_parameters": query_params,
+                        "timestamp": datetime.datetime.now().isoformat()
+                    }
+                    
+                    return result
+                else:
+                    logger.error(f"Query failed: {response.status_code} - {response.text}")
+                    return {
+                        "error": f"Query failed with status {response.status_code}",
+                        "details": response.text
+                    }
+                    
+        except Exception as e:
+            logger.error(f"Error querying service layer: {e}")
+            return {"error": str(e)}
+    
+    async def get_layer_info(self, service_name: str, folder: str = "", layer_id: int = 0) -> Dict[str, Any]:
+        """
+        Get information about a specific layer in a service
+        
+        Args:
+            service_name: Name of the service
+            folder: Folder containing the service (empty string for root)
+            layer_id: Layer ID to get info for (default: 0)
+        """
+        try:
+            # First, get the service details to determine the correct service type
+            service_details = await self.get_service_details(service_name, folder)
+            if "error" in service_details:
+                return service_details
+            
+            # Extract service metadata
+            service_metadata = service_details.get("service_metadata", {})
+            actual_service_name = service_metadata.get("name", service_name)
+            actual_folder = service_metadata.get("folder", folder)
+            service_type = service_metadata.get("type", "MapServer")
+            
+            # Construct the layer info endpoint
+            if actual_folder:
+                layer_endpoint = f"{actual_folder}/{actual_service_name}/{service_type}/{layer_id}"
+            else:
+                layer_endpoint = f"{actual_service_name}/{service_type}/{layer_id}"
+            
+            # Make the request
+            async with httpx.AsyncClient(verify=False, timeout=10.0, follow_redirects=True) as client:
+                # Ensure we have a valid token
+                await self._ensure_valid_token()
+                
+                url = f"{self.server_url}/{layer_endpoint}?f=json"
+                if self.portal_token:
+                    url += f"&token={self.portal_token}"
+                
+                logger.info(f"Getting layer info: {layer_endpoint}")
+                
+                response = await client.get(url)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    # Add layer metadata
+                    result["layer_metadata"] = {
+                        "service_name": actual_service_name,
+                        "folder": actual_folder,
+                        "service_type": service_type,
+                        "layer_id": layer_id,
+                        "timestamp": datetime.datetime.now().isoformat()
+                    }
+                    
+                    return result
+                else:
+                    logger.error(f"Layer info request failed: {response.status_code} - {response.text}")
+                    return {
+                        "error": f"Layer info request failed with status {response.status_code}",
+                        "details": response.text
+                    }
+                    
+        except Exception as e:
+            logger.error(f"Error getting layer info: {e}")
+            return {"error": str(e)}

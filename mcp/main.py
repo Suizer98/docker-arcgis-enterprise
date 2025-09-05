@@ -2,7 +2,7 @@
 
 import logging
 import os
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -25,6 +25,37 @@ class GetServiceDetailsRequest(BaseModel):
 
 class GetPortalTokenRequest(BaseModel):
     expiration: int = 60
+
+class QueryServiceLayerRequest(BaseModel):
+    service_name: str
+    folder: str = ""
+    layer_id: Optional[int] = 0
+    where: str = "1=1"
+    object_ids: Optional[List[int]] = None
+    geometry: Optional[Dict[str, Any]] = None
+    geometry_type: Optional[str] = "esriGeometryEnvelope"
+    spatial_rel: Optional[str] = "esriSpatialRelIntersects"
+    out_fields: str = "*"
+    return_geometry: bool = True
+    return_ids_only: bool = False
+    return_count_only: bool = False
+    order_by_fields: Optional[str] = None
+    group_by_fields_for_statistics: Optional[str] = None
+    out_statistics: Optional[List[Dict[str, Any]]] = None
+    result_offset: Optional[int] = None
+    result_record_count: Optional[int] = None
+    return_distinct_values: bool = False
+    return_extent_only: bool = False
+    max_record_count: Optional[int] = 1000
+
+class GetLayerInfoRequest(BaseModel):
+    service_name: str
+    folder: str = ""
+    layer_id: int = 0
+
+class QueryArcGISRequest(BaseModel):
+    url: str
+    params: Optional[Dict[str, Any]] = {}
 
 # FastAPI app setup
 app = FastAPI(
@@ -56,6 +87,8 @@ async def root():
         "endpoints": {
             "list_services": "/list-services",
             "get_service_details": "/get-service-details",
+            "query_service_layer": "/query-service-layer",
+            "get_layer_info": "/get-layer-info",
             "get_portal_token": "/get-portal-token",
             "test_connection": "/test-connection",
             "server_info": "/server-info",
@@ -158,6 +191,63 @@ async def get_token_status():
         logger.error(f"Error getting token status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/query-service-layer")
+async def query_service_layer(request: QueryArcGISRequest):
+    """Query ArcGIS REST API directly with a URL and parameters (simplified approach)"""
+    try:
+        import httpx
+        import json
+        
+        # Ensure we have a valid token
+        await arcgis_server._ensure_valid_token()
+        
+        # Add token to params if available
+        if arcgis_server.portal_token:
+            request.params["token"] = arcgis_server.portal_token
+        
+        logger.info(f"Querying ArcGIS URL: {request.url}")
+        logger.info(f"With parameters: {request.params}")
+        
+        async with httpx.AsyncClient(verify=False, timeout=30.0, follow_redirects=True) as client:
+            response = await client.get(request.url, params=request.params)
+            
+            if response.status_code == 200:
+                result = response.json()
+                return {
+                    "success": True,
+                    "data": result,
+                    "url": request.url,
+                    "params": request.params
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"HTTP {response.status_code}: {response.text}",
+                    "url": request.url,
+                    "params": request.params
+                }
+    except Exception as e:
+        logger.error(f"Error querying ArcGIS: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "url": request.url,
+            "params": request.params
+        }
+
+@app.post("/get-layer-info")
+async def get_layer_info(request: GetLayerInfoRequest):
+    try:
+        result = await arcgis_server.get_layer_info(
+            service_name=request.service_name,
+            folder=request.folder,
+            layer_id=request.layer_id
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error getting layer info: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/list-functions")
 async def list_functions():
     """List all available functions/tools that can be called"""
@@ -185,6 +275,50 @@ async def list_functions():
                         "type": "string",
                         "description": "Folder containing the service (optional)",
                         "default": "",
+                        "required": False
+                    }
+                }
+            },
+            {
+                "name": "query_service_layer",
+                "description": "Query ArcGIS REST API directly with a URL and parameters (simplified approach)",
+                "endpoint": "/query-service-layer",
+                "method": "POST",
+                "parameters": {
+                    "url": {
+                        "type": "string",
+                        "description": "Full ArcGIS REST API URL to query",
+                        "required": True
+                    },
+                    "params": {
+                        "type": "object",
+                        "description": "Query parameters to send with the request",
+                        "default": {},
+                        "required": False
+                    }
+                }
+            },
+            {
+                "name": "get_layer_info",
+                "description": "Get information about a specific layer in a service",
+                "endpoint": "/get-layer-info",
+                "method": "POST",
+                "parameters": {
+                    "service_name": {
+                        "type": "string",
+                        "description": "Name of the service",
+                        "required": True
+                    },
+                    "folder": {
+                        "type": "string",
+                        "description": "Folder containing the service",
+                        "default": "",
+                        "required": False
+                    },
+                    "layer_id": {
+                        "type": "integer",
+                        "description": "Layer ID to get info for",
+                        "default": 0,
                         "required": False
                     }
                 }
