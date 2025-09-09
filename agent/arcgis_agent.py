@@ -56,17 +56,24 @@ class ArcGISLangChainAgent:
         """Simple token estimation"""
         return int(len(text) * TOKEN_ESTIMATION_RATIO) if text else 0
     
-    def _trim_memory(self):
+    def _trim_memory(self, aggressive: bool = False):
         """Trim memory to prevent token limit issues"""
         messages = self.memory.chat_memory.messages
-        if len(messages) > 4:  # Keep only last 2 conversation pairs
-            self.memory.chat_memory.messages = messages[-4:]
-            logger.info(f"Memory trimmed to {len(self.memory.chat_memory.messages)} messages")
+        if aggressive:
+            # More aggressive trimming for token limit errors
+            if len(messages) > 2:  # Keep only last 1 conversation pair
+                self.memory.chat_memory.messages = messages[-2:]
+                logger.info(f"Memory aggressively trimmed to {len(self.memory.chat_memory.messages)} messages")
+        else:
+            # Normal trimming
+            if len(messages) > 4:  # Keep only last 2 conversation pairs
+                self.memory.chat_memory.messages = messages[-4:]
+                logger.info(f"Memory trimmed to {len(self.memory.chat_memory.messages)} messages")
     
     def _handle_token_limit_error(self):
         """Handle token limit exceeded errors"""
         logger.warning("Token limit exceeded, trimming memory")
-        self._trim_memory()
+        self._trim_memory(aggressive=True)
     
     async def _initialize(self):
         """Initialize the agent with dynamic tools from MCP server"""
@@ -379,72 +386,82 @@ class ArcGISLangChainAgent:
                 self._trim_memory()
                 chat_history = self.memory.chat_memory.messages
             
-            try:
-                # Add memory context to the input
-                input_data = {
-                    "input": message,
-                    "chat_history": chat_history
-                }
-                
-                result = await self.agent_executor.ainvoke(input_data)
-                tools_used = self.current_tools_used.copy()
-                
-                # Get the output message with better error handling
-                output = "No response generated"
-                if result is None:
-                    output = "No response generated from agent"
-                elif isinstance(result, dict):
-                    # Handle different possible result structures
-                    if "output" in result:
-                        output = result["output"]
-                    elif "response" in result:
-                        output = result["response"]
-                    elif "message" in result:
-                        output = result["message"]
-                    elif "text" in result:
-                        output = result["text"]
+            # Check if the current message itself is too large
+            message_tokens = self._estimate_tokens(message)
+            if message_tokens > MAX_TOKENS_PER_REQUEST * 0.8:  # If message is 80% of token limit
+                logger.warning(f"Message is very large ({message_tokens} tokens), trimming memory aggressively")
+                self._trim_memory(aggressive=True)
+                chat_history = self.memory.chat_memory.messages
+            
+            # Retry logic for token limit errors
+            max_retries = 2
+            retry_count = 0
+            output = "No response generated"
+            tools_used = []
+            
+            while retry_count <= max_retries:
+                try:
+                    # Add memory context to the input
+                    input_data = {
+                        "input": message,
+                        "chat_history": chat_history
+                    }
+                    
+                    result = await self.agent_executor.ainvoke(input_data)
+                    tools_used = self.current_tools_used.copy()
+                    
+                    # Get the output message with better error handling
+                    if result is None:
+                        output = "No response generated from agent"
+                    elif isinstance(result, dict):
+                        # Handle different possible result structures
+                        if "output" in result:
+                            output = result["output"]
+                        elif "response" in result:
+                            output = result["response"]
+                        elif "message" in result:
+                            output = result["message"]
+                        elif "text" in result:
+                            output = result["text"]
+                        else:
+                            # If it's a dict but no recognizable output field, convert to string
+                            output = str(result)
+                    elif hasattr(result, 'output') and result.output is not None:
+                        output = result.output
+                    elif hasattr(result, 'get') and result.get is not None:
+                        output = result.get("output", "No response generated")
                     else:
-                        # If it's a dict but no recognizable output field, convert to string
-                        output = str(result)
-                elif hasattr(result, 'output') and result.output is not None:
-                    output = result.output
-                elif hasattr(result, 'get') and result.get is not None:
-                    output = result.get("output", "No response generated")
-                else:
-                    output = str(result) if result is not None else "No response generated"
-                
-                # Save the conversation to memory
+                        output = str(result) if result is not None else "No response generated"
+                    
+                    # Success - break out of retry loop
+                    break
+                    
+                except Exception as agent_error:
+                    error_str = str(agent_error)
+                    logger.error(f"Agent execution error (attempt {retry_count + 1}): {agent_error}")
+                    
+                    # Check if this is a token limit error
+                    if ("Request too large" in error_str or "tokens per minute" in error_str or "rate_limit_exceeded" in error_str) and retry_count < max_retries:
+                        logger.info(f"Token limit exceeded, trimming memory and retrying (attempt {retry_count + 1}/{max_retries})")
+                        self._handle_token_limit_error()
+                        chat_history = self.memory.chat_memory.messages  # Get updated chat history
+                        retry_count += 1
+                        continue  # Retry with trimmed memory
+                    else:
+                        # Either not a token error, or max retries exceeded
+                        if "Request too large" in error_str or "tokens per minute" in error_str or "rate_limit_exceeded" in error_str:
+                            output = f"I encountered a token limit error and tried to clear conversation history, but the request is still too large. Please try a shorter question or break it into smaller parts."
+                        else:
+                            output = f"I encountered an error while processing your request: {str(agent_error)}. Please try rephrasing your question."
+                        tools_used = self.current_tools_used.copy()
+                        break  # Exit retry loop
+            
+            # Save the conversation to memory (only if we have a successful response)
+            if output and not output.startswith("I encountered"):
                 self.memory.save_context(
                     {"input": message},
                     {"output": output}
                 )
-                
-                
-            except Exception as agent_error:
-                error_str = str(agent_error)
-                logger.error(f"Agent execution error: {agent_error}")
-                
-                # Check if this is a token limit error
-                if "Request too large" in error_str or "tokens per minute" in error_str or "rate_limit_exceeded" in error_str:
-                    self._handle_token_limit_error()
-                    output = "I encountered a token limit error and cleared some conversation history. Please try your question again."
-                    tools_used = self.current_tools_used.copy()
-                    
-                    # Save the error to memory
-                    self.memory.save_context(
-                        {"input": message},
-                        {"output": output}
-                    )
-                else:
-                    # Regular error handling
-                    output = f"I encountered an error while processing your request: {str(agent_error)}. Please try rephrasing your question."
-                    tools_used = self.current_tools_used.copy()
-                    
-                    # Save the error to memory as well
-                    self.memory.save_context(
-                        {"input": message},
-                        {"output": output}
-                    )
             
             return {
                 "message": output,
