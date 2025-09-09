@@ -24,38 +24,35 @@ TOKEN_ESTIMATION_RATIO = 1.3  # 1 token ≈ 0.75 characters
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class ArcGISLangChainAgent:
     def __init__(self, memory_window_size: int = 5):
         self.groq_client = ChatGroq(
-            model=MODEL_NAME,
-            api_key=os.getenv("GROQ_API_KEY"),
-            temperature=0.7
+            model=MODEL_NAME, api_key=os.getenv("GROQ_API_KEY"), temperature=0.7
         )
         self.session_id = "default_session"
         self.mcp_server_url = os.getenv("MCP_SERVER_URL")
         if not self.mcp_server_url:
             raise ValueError("MCP_SERVER_URL environment variable is required")
         self.mcp_session = None
-        
+
         # Memory configuration with token awareness
         self.memory_window_size = memory_window_size
         self.memory = ConversationBufferWindowMemory(
-            k=memory_window_size,
-            memory_key="chat_history",
-            return_messages=True
+            k=memory_window_size, memory_key="chat_history", return_messages=True
         )
-        
+
         # Tools will be created dynamically
         self.tools = []
         self.agent_executor = None
         self._initialized = False
         self.function_info = {}  # Store function info from MCP server
         self.current_tools_used = []  # Track tools used in current request
-    
+
     def _estimate_tokens(self, text: str) -> int:
         """Simple token estimation"""
         return int(len(text) * TOKEN_ESTIMATION_RATIO) if text else 0
-    
+
     def _trim_memory(self, aggressive: bool = False):
         """Trim memory to prevent token limit issues"""
         messages = self.memory.chat_memory.messages
@@ -63,18 +60,22 @@ class ArcGISLangChainAgent:
             # More aggressive trimming for token limit errors
             if len(messages) > 2:  # Keep only last 1 conversation pair
                 self.memory.chat_memory.messages = messages[-2:]
-                logger.info(f"Memory aggressively trimmed to {len(self.memory.chat_memory.messages)} messages")
+                logger.info(
+                    f"Memory aggressively trimmed to {len(self.memory.chat_memory.messages)} messages"
+                )
         else:
             # Normal trimming
             if len(messages) > 4:  # Keep only last 2 conversation pairs
                 self.memory.chat_memory.messages = messages[-4:]
-                logger.info(f"Memory trimmed to {len(self.memory.chat_memory.messages)} messages")
-    
+                logger.info(
+                    f"Memory trimmed to {len(self.memory.chat_memory.messages)} messages"
+                )
+
     def _handle_token_limit_error(self):
         """Handle token limit exceeded errors"""
         logger.warning("Token limit exceeded, trimming memory")
         self._trim_memory(aggressive=True)
-    
+
     async def _initialize(self):
         """Initialize the agent with dynamic tools from MCP server"""
         if not self._initialized:
@@ -83,8 +84,7 @@ class ArcGISLangChainAgent:
             self._initialized = True
         else:
             self.current_tools_used = []
-    
-    
+
     async def _connect_mcp(self):
         """Connect to MCP server"""
         if self.mcp_session is None:
@@ -96,15 +96,18 @@ class ArcGISLangChainAgent:
             except Exception as e:
                 logger.error(f"Failed to connect to MCP server: {e}")
                 self.mcp_session = None
-    
-    
+
     async def _discover_mcp_tools(self) -> List[Dict[str, Any]]:
         """Discover available tools from MCP server using list-functions endpoint"""
         try:
             import httpx
-            
-            base_url = self.mcp_server_url[:-4] if self.mcp_server_url.endswith("/mcp") else self.mcp_server_url
-            
+
+            base_url = (
+                self.mcp_server_url[:-4]
+                if self.mcp_server_url.endswith("/mcp")
+                else self.mcp_server_url
+            )
+
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(f"{base_url}/list-functions")
                 if response.status_code == 200:
@@ -116,38 +119,45 @@ class ArcGISLangChainAgent:
 
     def _create_dynamic_tool(self, function_info: Dict[str, Any]) -> BaseTool:
         """Create a LangChain tool dynamically from MCP function info"""
-        
+
         def dynamic_tool_func(**kwargs) -> str:
             """Dynamic tool function that calls MCP endpoint"""
             try:
                 import asyncio
+
                 if function_info["name"] not in self.current_tools_used:
                     self.current_tools_used.append(function_info["name"])
                 logger.info(f"Calling tool {function_info['name']} with args: {kwargs}")
                 logger.info(f"Args type: {type(kwargs)}, Args content: {kwargs}")
                 logger.info(f"Args keys: {list(kwargs.keys()) if kwargs else 'None'}")
-                logger.info(f"Args values: {list(kwargs.values()) if kwargs else 'None'}")
-                result = asyncio.run(self._call_mcp_tool_dynamic(function_info["name"], kwargs))
+                logger.info(
+                    f"Args values: {list(kwargs.values()) if kwargs else 'None'}"
+                )
+                result = asyncio.run(
+                    self._call_mcp_tool_dynamic(function_info["name"], kwargs)
+                )
                 logger.info(f"Tool {function_info['name']} result: {result[:200]}...")
                 return result
             except Exception as e:
                 logger.error(f"Error in tool {function_info['name']}: {e}")
                 return f"Error: {str(e)}"
-        
+
         # Create a proper schema based on the function parameters
         parameters = function_info.get("parameters", {})
-        
+
         if parameters:
             # Create a dynamic model with the correct field names and types
             fields = {}
             annotations = {}
-            
+
             for param_name, param_info in parameters.items():
                 param_type = param_info.get("type", "string")
-                param_description = param_info.get("description", f"Parameter {param_name}")
+                param_description = param_info.get(
+                    "description", f"Parameter {param_name}"
+                )
                 param_default = param_info.get("default")
                 param_required = param_info.get("required", False)
-                
+
                 # Convert type string to Python type
                 if param_type == "boolean":
                     field_type = bool
@@ -159,7 +169,7 @@ class ArcGISLangChainAgent:
                     field_type = Dict[str, Any]
                 else:
                     field_type = str
-                
+
                 # Create field with proper default handling
                 if param_required:
                     fields[param_name] = Field(description=param_description)
@@ -167,29 +177,39 @@ class ArcGISLangChainAgent:
                 else:
                     # For optional parameters, always use Optional type
                     annotations[param_name] = Optional[field_type]
-                    
+
                     # Set appropriate defaults based on type and provided default
                     if param_default is not None:
-                        fields[param_name] = Field(default=param_default, description=param_description)
+                        fields[param_name] = Field(
+                            default=param_default, description=param_description
+                        )
                     else:
                         # For optional parameters without explicit default, use sensible defaults
                         if field_type == bool:
-                            fields[param_name] = Field(default=False, description=param_description)
+                            fields[param_name] = Field(
+                                default=False, description=param_description
+                            )
                         elif field_type == int:
-                            fields[param_name] = Field(default=0, description=param_description)
+                            fields[param_name] = Field(
+                                default=0, description=param_description
+                            )
                         elif field_type == str:
-                            fields[param_name] = Field(default="", description=param_description)
+                            fields[param_name] = Field(
+                                default="", description=param_description
+                            )
                         else:
                             # For complex types like arrays and objects, use None as default
-                            fields[param_name] = Field(default=None, description=param_description)
-            
+                            fields[param_name] = Field(
+                                default=None, description=param_description
+                            )
+
             # Create the dynamic model
             class DynamicToolInput(BaseModel):
                 __annotations__ = annotations
-                
+
                 class Config:
                     extra = "ignore"  # Ignore extra fields instead of allowing them
-            
+
             # Add the fields to the model
             for field_name, field_def in fields.items():
                 setattr(DynamicToolInput, field_name, field_def)
@@ -198,20 +218,20 @@ class ArcGISLangChainAgent:
             class DynamicToolInput(BaseModel):
                 class Config:
                     extra = "ignore"
-        
+
         # Create a dynamic schema based on the function parameters from MCP
         parameters = function_info.get("parameters", {})
-        
+
         if parameters:
             # Create a dynamic model with the correct field names and types
             fields = {}
             annotations = {}
-            
+
             for param_name, param_info in parameters.items():
                 param_type = param_info.get("type", "string")
                 param_required = param_info.get("required", False)
                 param_default = param_info.get("default")
-                
+
                 # Convert type string to Python type
                 if param_type == "boolean":
                     field_type = bool
@@ -223,72 +243,110 @@ class ArcGISLangChainAgent:
                     field_type = Dict[str, Any]
                 else:
                     field_type = str
-                
+
                 # Create field with proper default handling
                 if param_required:
-                    fields[param_name] = Field(description=param_info.get("description", f"Parameter {param_name}"))
+                    fields[param_name] = Field(
+                        description=param_info.get(
+                            "description", f"Parameter {param_name}"
+                        )
+                    )
                     annotations[param_name] = field_type
                 else:
                     # For optional parameters, use Optional type
                     annotations[param_name] = Optional[field_type]
-                    
+
                     # Set appropriate defaults
                     if param_default is not None:
-                        fields[param_name] = Field(default=param_default, description=param_info.get("description", f"Parameter {param_name}"))
+                        fields[param_name] = Field(
+                            default=param_default,
+                            description=param_info.get(
+                                "description", f"Parameter {param_name}"
+                            ),
+                        )
                     else:
                         # Use sensible defaults based on type
                         if field_type == bool:
-                            fields[param_name] = Field(default=False, description=param_info.get("description", f"Parameter {param_name}"))
+                            fields[param_name] = Field(
+                                default=False,
+                                description=param_info.get(
+                                    "description", f"Parameter {param_name}"
+                                ),
+                            )
                         elif field_type == int:
-                            fields[param_name] = Field(default=0, description=param_info.get("description", f"Parameter {param_name}"))
+                            fields[param_name] = Field(
+                                default=0,
+                                description=param_info.get(
+                                    "description", f"Parameter {param_name}"
+                                ),
+                            )
                         elif field_type == str:
-                            fields[param_name] = Field(default="", description=param_info.get("description", f"Parameter {param_name}"))
+                            fields[param_name] = Field(
+                                default="",
+                                description=param_info.get(
+                                    "description", f"Parameter {param_name}"
+                                ),
+                            )
                         else:
-                            fields[param_name] = Field(default=None, description=param_info.get("description", f"Parameter {param_name}"))
-            
+                            fields[param_name] = Field(
+                                default=None,
+                                description=param_info.get(
+                                    "description", f"Parameter {param_name}"
+                                ),
+                            )
+
             # Create the dynamic model
             class DynamicToolInput(BaseModel):
                 __annotations__ = annotations
-                
+
                 class Config:
                     extra = "ignore"  # Ignore extra fields
-            
+
             # Add the fields to the model
             for field_name, field_def in fields.items():
                 setattr(DynamicToolInput, field_name, field_def)
-            
+
             schema = DynamicToolInput
         else:
             # No parameters, create empty model
             class EmptyInput(BaseModel):
                 pass
+
             schema = EmptyInput
-        
+
         return StructuredTool.from_function(
             func=dynamic_tool_func,
             name=function_info["name"],
-            description=function_info.get("description", f"Call {function_info['name']}"),
-            args_schema=schema
+            description=function_info.get(
+                "description", f"Call {function_info['name']}"
+            ),
+            args_schema=schema,
         )
 
-    async def _call_mcp_tool_dynamic(self, function_name: str, arguments: dict = None) -> str:
+    async def _call_mcp_tool_dynamic(
+        self, function_name: str, arguments: dict = None
+    ) -> str:
         """Call MCP function dynamically based on discovered function info"""
         try:
             import httpx
-            
-            base_url = self.mcp_server_url[:-4] if self.mcp_server_url.endswith("/mcp") else self.mcp_server_url
+
+            base_url = (
+                self.mcp_server_url[:-4]
+                if self.mcp_server_url.endswith("/mcp")
+                else self.mcp_server_url
+            )
             function_info = self.function_info.get(function_name)
             if not function_info:
                 logger.error(f"Function {function_name} not found in function_info")
                 return f"Error: Function {function_name} not found"
-            
+
             endpoint = function_info.get("endpoint", f"/{function_name}")
             method = function_info.get("method", "POST")
             url = f"{base_url}{endpoint}"
-            
+
             logger.info(f"Calling MCP endpoint: {url} with method {method}")
             logger.info(f"Arguments: {arguments}")
-            
+
             async with httpx.AsyncClient(timeout=30.0) as client:
                 if method.upper() == "GET":
                     response = await client.get(url)
@@ -296,19 +354,22 @@ class ArcGISLangChainAgent:
                     # Ensure we always send a JSON body, even if arguments is None
                     request_body = arguments if arguments is not None else {}
                     response = await client.post(url, json=request_body)
-                
+
                 logger.info(f"Response status: {response.status_code}")
-                
+
                 if response.status_code == 200:
                     result = response.json()
                     logger.info(f"Response data type: {type(result)}")
                     return json.dumps(result, indent=2)
                 else:
-                    logger.error(f"HTTP error: {response.status_code} - {response.text}")
+                    logger.error(
+                        f"HTTP error: {response.status_code} - {response.text}"
+                    )
                     return f"Error: HTTP {response.status_code}: {response.text}"
         except Exception as e:
             logger.error(f"Exception in _call_mcp_tool_dynamic: {e}")
             import traceback
+
             logger.error(f"Traceback: {traceback.format_exc()}")
             return f"Error: {str(e)}"
 
@@ -317,61 +378,67 @@ class ArcGISLangChainAgent:
         tools = []
         mcp_functions = await self._discover_mcp_tools()
         self.function_info = {func["name"]: func for func in mcp_functions}
-        
+
         for function_info in mcp_functions:
             try:
                 tools.append(self._create_dynamic_tool(function_info))
             except Exception as e:
-                logger.error(f"Failed to create tool {function_info.get('name', 'unknown')}: {e}")
-        
+                logger.error(
+                    f"Failed to create tool {function_info.get('name', 'unknown')}: {e}"
+                )
+
         return tools
 
     async def _create_fallback_tools(self) -> List[BaseTool]:
         """Create fallback tools if MCP discovery fails"""
         return []
-    
+
     def _create_agent_with_tools(self):
         """Create an agent with dynamically discovered tools"""
         if not self.tools:
             return self._create_simple_chain()
-        
-        tools_list = chr(10).join([f"- {tool.name}: {tool.description}" for tool in self.tools])
-        system_prompt = get_system_prompt(tools_list)
-        
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
-            MessagesPlaceholder(variable_name="chat_history"),
-            ("human", "{input}"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ])
-        
-        agent = create_tool_calling_agent(
-            llm=self.groq_client,
-            tools=self.tools,
-            prompt=prompt
+
+        tools_list = chr(10).join(
+            [f"- {tool.name}: {tool.description}" for tool in self.tools]
         )
-        
+        system_prompt = get_system_prompt(tools_list)
+
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system_prompt),
+                MessagesPlaceholder(variable_name="chat_history"),
+                ("human", "{input}"),
+                MessagesPlaceholder(variable_name="agent_scratchpad"),
+            ]
+        )
+
+        agent = create_tool_calling_agent(
+            llm=self.groq_client, tools=self.tools, prompt=prompt
+        )
+
         return AgentExecutor(
             agent=agent,
             tools=self.tools,
             verbose=True,
             handle_parsing_errors=True,
             max_iterations=5,
-            return_intermediate_steps=True
+            return_intermediate_steps=True,
         )
-    
+
     def _create_simple_chain(self):
         """Create a simple chain without tools"""
         system_prompt = get_simple_system_prompt()
-        
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
-            MessagesPlaceholder(variable_name="chat_history"),
-            ("human", "{input}"),
-        ])
-        
+
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system_prompt),
+                MessagesPlaceholder(variable_name="chat_history"),
+                ("human", "{input}"),
+            ]
+        )
+
         return prompt | self.groq_client | StrOutputParser()
-    
+
     async def process_message(self, message: str) -> Dict[str, Any]:
         """Process user message using dynamically discovered tools with memory"""
         try:
@@ -379,37 +446,38 @@ class ArcGISLangChainAgent:
                 await self._initialize()
             else:
                 self.current_tools_used = []
-            
+
             # Simple memory management
             chat_history = self.memory.chat_memory.messages
             if len(chat_history) > 6:  # Trim if more than 3 conversation pairs
                 self._trim_memory()
                 chat_history = self.memory.chat_memory.messages
-            
+
             # Check if the current message itself is too large
             message_tokens = self._estimate_tokens(message)
-            if message_tokens > MAX_TOKENS_PER_REQUEST * 0.8:  # If message is 80% of token limit
-                logger.warning(f"Message is very large ({message_tokens} tokens), trimming memory aggressively")
+            if (
+                message_tokens > MAX_TOKENS_PER_REQUEST * 0.8
+            ):  # If message is 80% of token limit
+                logger.warning(
+                    f"Message is very large ({message_tokens} tokens), trimming memory aggressively"
+                )
                 self._trim_memory(aggressive=True)
                 chat_history = self.memory.chat_memory.messages
-            
+
             # Retry logic for token limit errors
             max_retries = 2
             retry_count = 0
             output = "No response generated"
             tools_used = []
-            
+
             while retry_count <= max_retries:
                 try:
                     # Add memory context to the input
-                    input_data = {
-                        "input": message,
-                        "chat_history": chat_history
-                    }
-                    
+                    input_data = {"input": message, "chat_history": chat_history}
+
                     result = await self.agent_executor.ainvoke(input_data)
                     tools_used = self.current_tools_used.copy()
-                    
+
                     # Get the output message with better error handling
                     if result is None:
                         output = "No response generated from agent"
@@ -426,43 +494,58 @@ class ArcGISLangChainAgent:
                         else:
                             # If it's a dict but no recognizable output field, convert to string
                             output = str(result)
-                    elif hasattr(result, 'output') and result.output is not None:
+                    elif hasattr(result, "output") and result.output is not None:
                         output = result.output
-                    elif hasattr(result, 'get') and result.get is not None:
+                    elif hasattr(result, "get") and result.get is not None:
                         output = result.get("output", "No response generated")
                     else:
-                        output = str(result) if result is not None else "No response generated"
-                    
+                        output = (
+                            str(result)
+                            if result is not None
+                            else "No response generated"
+                        )
+
                     # Success - break out of retry loop
                     break
-                    
+
                 except Exception as agent_error:
                     error_str = str(agent_error)
-                    logger.error(f"Agent execution error (attempt {retry_count + 1}): {agent_error}")
-                    
+                    logger.error(
+                        f"Agent execution error (attempt {retry_count + 1}): {agent_error}"
+                    )
+
                     # Check if this is a token limit error
-                    if ("Request too large" in error_str or "tokens per minute" in error_str or "rate_limit_exceeded" in error_str) and retry_count < max_retries:
-                        logger.info(f"Token limit exceeded, trimming memory and retrying (attempt {retry_count + 1}/{max_retries})")
+                    if (
+                        "Request too large" in error_str
+                        or "tokens per minute" in error_str
+                        or "rate_limit_exceeded" in error_str
+                    ) and retry_count < max_retries:
+                        logger.info(
+                            f"Token limit exceeded, trimming memory and retrying (attempt {retry_count + 1}/{max_retries})"
+                        )
                         self._handle_token_limit_error()
-                        chat_history = self.memory.chat_memory.messages  # Get updated chat history
+                        chat_history = (
+                            self.memory.chat_memory.messages
+                        )  # Get updated chat history
                         retry_count += 1
                         continue  # Retry with trimmed memory
                     else:
                         # Either not a token error, or max retries exceeded
-                        if "Request too large" in error_str or "tokens per minute" in error_str or "rate_limit_exceeded" in error_str:
+                        if (
+                            "Request too large" in error_str
+                            or "tokens per minute" in error_str
+                            or "rate_limit_exceeded" in error_str
+                        ):
                             output = f"I encountered a token limit error and tried to clear conversation history, but the request is still too large. Please try a shorter question or break it into smaller parts."
                         else:
                             output = f"I encountered an error while processing your request: {str(agent_error)}. Please try rephrasing your question."
                         tools_used = self.current_tools_used.copy()
                         break  # Exit retry loop
-            
+
             # Save the conversation to memory (only if we have a successful response)
             if output and not output.startswith("I encountered"):
-                self.memory.save_context(
-                    {"input": message},
-                    {"output": output}
-                )
-            
+                self.memory.save_context({"input": message}, {"output": output})
+
             return {
                 "message": output,
                 "session_id": self.session_id,
@@ -472,38 +555,42 @@ class ArcGISLangChainAgent:
                     "framework": "langchain + dynamic mcp + memory",
                     "tools_discovered": len(self.tools),
                     "memory_window_size": self.memory_window_size,
-                    "estimated_tokens": sum(self._estimate_tokens(msg.content) for msg in self.memory.chat_memory.messages if hasattr(msg, 'content') and msg.content)
-                }
+                    "estimated_tokens": sum(
+                        self._estimate_tokens(msg.content)
+                        for msg in self.memory.chat_memory.messages
+                        if hasattr(msg, "content") and msg.content
+                    ),
+                },
             }
-            
+
         except Exception as e:
             logger.error(f"Error processing message: {e}")
             import traceback
+
             logger.error(f"Traceback: {traceback.format_exc()}")
             return {
                 "message": f"I encountered an error: {str(e)}. Please try again.",
                 "session_id": self.session_id,
                 "tools_used": [],
-                "metadata": {"error": str(e)}
+                "metadata": {"error": str(e)},
             }
-    
+
     def clear_memory(self):
         """Clear the conversation memory"""
         self.memory.clear()
         logger.info("Conversation memory cleared")
-    
+
     def get_memory_history(self) -> List[Dict[str, str]]:
         """Get the current conversation history"""
         messages = self.memory.chat_memory.messages
         history = []
         for i in range(0, len(messages), 2):
             if i + 1 < len(messages):
-                history.append({
-                    "user": messages[i].content,
-                    "assistant": messages[i + 1].content
-                })
+                history.append(
+                    {"user": messages[i].content, "assistant": messages[i + 1].content}
+                )
         return history
-    
+
     def get_memory_summary(self) -> Dict[str, Any]:
         """Get a summary of the current memory state"""
         messages = self.memory.chat_memory.messages
@@ -512,19 +599,17 @@ class ArcGISLangChainAgent:
             "total_messages": len(messages),
             "conversation_pairs": len(messages) // 2,
             "memory_window_size": self.memory_window_size,
-            "memory_usage_percentage": (len(messages) / (self.memory_window_size * 2)) * 100,
+            "memory_usage_percentage": (len(messages) / (self.memory_window_size * 2))
+            * 100,
             "estimated_tokens": estimated_tokens,
             "token_usage_percentage": (estimated_tokens / MAX_TOKENS_PER_REQUEST) * 100,
-            "token_limit_exceeded_count": self.token_limit_exceeded_count
+            "token_limit_exceeded_count": self.token_limit_exceeded_count,
         }
-    
+
     def set_memory_window_size(self, new_size: int):
         """Update the memory window size (requires reinitialization)"""
         self.memory_window_size = new_size
         self.memory = ConversationBufferWindowMemory(
-            k=new_size,
-            memory_key="chat_history",
-            return_messages=True
+            k=new_size, memory_key="chat_history", return_messages=True
         )
         logger.info(f"Memory window size updated to {new_size}")
-    

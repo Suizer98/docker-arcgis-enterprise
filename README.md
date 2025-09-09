@@ -53,6 +53,15 @@ curl -X POST http://localhost:8000/chat \
   -d '{"message": "Is there a service called TouristAttractions?"}'
 ```
 
+## Code Formatting and Linting
+
+Both Agent and MCP are using FastAPI built on Python, to run the `black` linter:
+
+```bash
+docker exec -it docker-arcgis-enterprise-agent-1 black /app
+docker exec -it docker-arcgis-enterprise-mcp-1 black /app
+```
+
 ## Endpoints
 
 - **AI Agent**: http://localhost:8000/chat

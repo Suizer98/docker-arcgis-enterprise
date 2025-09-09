@@ -151,7 +151,7 @@ services:
       - ARCGIS_PASSWORD=${MCP_PASSWORD}
       - DEBUG=${DEBUG:-false}
     volumes:
-      - ./mcp:/app:ro
+      - ./mcp:/app:rw
 
   agent:
     image: arcgis-langchain-agent
@@ -167,4 +167,4 @@ services:
       - MCP_SERVER_URL=http://mcp:8001/mcp
       - DEBUG=${DEBUG:-false}
     volumes:
-      - ./agent:/app:ro
+      - ./agent:/app:rw

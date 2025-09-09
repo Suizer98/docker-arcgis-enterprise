@@ -15,16 +15,20 @@ from arcgis_client import ArcGISClient
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 # Pydantic models for API
 class ListServicesRequest(BaseModel):
     pass
+
 
 class GetServiceDetailsRequest(BaseModel):
     service_name: str
     folder: Optional[str] = ""
 
+
 class GetPortalTokenRequest(BaseModel):
     expiration: int = 60
+
 
 class QueryServiceLayerRequest(BaseModel):
     service_name: str
@@ -48,20 +52,23 @@ class QueryServiceLayerRequest(BaseModel):
     return_extent_only: bool = False
     max_record_count: Optional[int] = 1000
 
+
 class GetLayerInfoRequest(BaseModel):
     service_name: str
     folder: str = ""
     layer_id: int = 0
 
+
 class QueryArcGISRequest(BaseModel):
     url: str
     params: Optional[Dict[str, Any]] = {}
+
 
 # FastAPI app setup
 app = FastAPI(
     title="ArcGIS Enterprise MCP Server",
     description="MCP server for ArcGIS Enterprise functionality using FastAPI-MCP",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 app.add_middleware(
@@ -77,6 +84,7 @@ arcgis_server = ArcGISClient()
 
 # Initialize FastAPI-MCP
 mcp = FastApiMCP(app)
+
 
 @app.get("/")
 async def root():
@@ -94,9 +102,10 @@ async def root():
             "server_info": "/server-info",
             "portal_info": "/portal-info",
             "health": "/health",
-            "mcp": "/mcp"
-        }
+            "mcp": "/mcp",
+        },
     }
+
 
 @app.get("/health")
 async def health_check():
@@ -107,40 +116,40 @@ async def health_check():
             "status": "healthy",
             "arcgis_server": arcgis_server.server_url,
             "arcgis_portal": arcgis_server.portal_url,
-            "credentials_configured": bool(arcgis_server.username and arcgis_server.password),
-            "version": "1.0.0"
+            "credentials_configured": bool(
+                arcgis_server.username and arcgis_server.password
+            ),
+            "version": "1.0.0",
         }
     except Exception as e:
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "version": "1.0.0"
-        }
+        return {"status": "unhealthy", "error": str(e), "version": "1.0.0"}
+
 
 @app.post("/list-services")
 async def list_services(request: ListServicesRequest):
     try:
         services = await arcgis_server.list_services()
-        return {
-            "services": services,
-            "count": len(services)
-        }
+        return {"services": services, "count": len(services)}
     except Exception as e:
         logger.error(f"Error listing services: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/get-service-details")
 async def get_service_details(request: GetServiceDetailsRequest):
     try:
-        details = await arcgis_server.get_service_details(request.service_name, request.folder)
+        details = await arcgis_server.get_service_details(
+            request.service_name, request.folder
+        )
         return {
             "service_name": request.service_name,
             "folder": request.folder,
-            "details": details
+            "details": details,
         }
     except Exception as e:
         logger.error(f"Error getting service details: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/get-portal-token")
 async def get_portal_token(request: GetPortalTokenRequest):
@@ -149,11 +158,12 @@ async def get_portal_token(request: GetPortalTokenRequest):
         return {
             "token": token,
             "expiration_minutes": request.expiration,
-            "success": token is not None
+            "success": token is not None,
         }
     except Exception as e:
         logger.error(f"Error getting portal token: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/test-connection")
 async def test_connection():
@@ -164,6 +174,7 @@ async def test_connection():
         logger.error(f"Error testing connection: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/server-info")
 async def get_server_info():
     try:
@@ -172,6 +183,7 @@ async def get_server_info():
     except Exception as e:
         logger.error(f"Error getting server info: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/portal-info")
 async def get_portal_info():
@@ -182,6 +194,7 @@ async def get_portal_info():
         logger.error(f"Error getting portal info: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/token-status")
 async def get_token_status():
     try:
@@ -191,40 +204,43 @@ async def get_token_status():
         logger.error(f"Error getting token status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/query-service-layer")
 async def query_service_layer(request: QueryArcGISRequest):
     """Query ArcGIS REST API directly with a URL and parameters (simplified approach)"""
     try:
         import httpx
         import json
-        
+
         # Ensure we have a valid token
         await arcgis_server._ensure_valid_token()
-        
+
         # Add token to params if available
         if arcgis_server.portal_token:
             request.params["token"] = arcgis_server.portal_token
-        
+
         logger.info(f"Querying ArcGIS URL: {request.url}")
         logger.info(f"With parameters: {request.params}")
-        
-        async with httpx.AsyncClient(verify=False, timeout=30.0, follow_redirects=True) as client:
+
+        async with httpx.AsyncClient(
+            verify=False, timeout=30.0, follow_redirects=True
+        ) as client:
             response = await client.get(request.url, params=request.params)
-            
+
             if response.status_code == 200:
                 result = response.json()
                 return {
                     "success": True,
                     "data": result,
                     "url": request.url,
-                    "params": request.params
+                    "params": request.params,
                 }
             else:
                 return {
                     "success": False,
                     "error": f"HTTP {response.status_code}: {response.text}",
                     "url": request.url,
-                    "params": request.params
+                    "params": request.params,
                 }
     except Exception as e:
         logger.error(f"Error querying ArcGIS: {e}")
@@ -232,8 +248,9 @@ async def query_service_layer(request: QueryArcGISRequest):
             "success": False,
             "error": str(e),
             "url": request.url,
-            "params": request.params
+            "params": request.params,
         }
+
 
 @app.post("/get-layer-info")
 async def get_layer_info(request: GetLayerInfoRequest):
@@ -241,12 +258,13 @@ async def get_layer_info(request: GetLayerInfoRequest):
         result = await arcgis_server.get_layer_info(
             service_name=request.service_name,
             folder=request.folder,
-            layer_id=request.layer_id
+            layer_id=request.layer_id,
         )
         return result
     except Exception as e:
         logger.error(f"Error getting layer info: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/list-functions")
 async def list_functions():
@@ -258,7 +276,7 @@ async def list_functions():
                 "description": "Get all available ArcGIS services from the server (includes all folders)",
                 "endpoint": "/list-services",
                 "method": "POST",
-                "parameters": {}
+                "parameters": {},
             },
             {
                 "name": "get_service_details",
@@ -269,15 +287,15 @@ async def list_functions():
                     "service_name": {
                         "type": "string",
                         "description": "Name of the service to get details for",
-                        "required": True
+                        "required": True,
                     },
                     "folder": {
                         "type": "string",
                         "description": "Folder containing the service (optional)",
                         "default": "",
-                        "required": False
-                    }
-                }
+                        "required": False,
+                    },
+                },
             },
             {
                 "name": "query_service_layer",
@@ -288,15 +306,15 @@ async def list_functions():
                     "url": {
                         "type": "string",
                         "description": "Full ArcGIS REST API URL to query",
-                        "required": True
+                        "required": True,
                     },
                     "params": {
                         "type": "object",
                         "description": "Query parameters to send with the request",
                         "default": {},
-                        "required": False
-                    }
-                }
+                        "required": False,
+                    },
+                },
             },
             {
                 "name": "get_layer_info",
@@ -307,49 +325,50 @@ async def list_functions():
                     "service_name": {
                         "type": "string",
                         "description": "Name of the service",
-                        "required": True
+                        "required": True,
                     },
                     "folder": {
                         "type": "string",
                         "description": "Folder containing the service",
                         "default": "",
-                        "required": False
+                        "required": False,
                     },
                     "layer_id": {
                         "type": "integer",
                         "description": "Layer ID to get info for",
                         "default": 0,
-                        "required": False
-                    }
-                }
+                        "required": False,
+                    },
+                },
             },
             {
                 "name": "test_connection",
                 "description": "Test connection to ArcGIS Server and Portal",
                 "endpoint": "/test-connection",
                 "method": "GET",
-                "parameters": {}
-            }
+                "parameters": {},
+            },
         ]
-        
+
         return {
             "functions": functions,
             "count": len(functions),
-            "server": "ArcGIS Enterprise MCP Server"
+            "server": "ArcGIS Enterprise MCP Server",
         }
     except Exception as e:
         logger.error(f"Error listing functions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 # Mount the MCP server to the FastAPI app
 mcp.mount()
 
 if __name__ == "__main__":
     load_dotenv()
-    
+
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=8001,
-        reload=os.getenv("DEBUG", "false").lower() == "true"
+        reload=os.getenv("DEBUG", "false").lower() == "true",
     )
