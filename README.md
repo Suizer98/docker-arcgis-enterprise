@@ -2,7 +2,7 @@
 
 > **AI-Powered ArcGIS Enterprise** - Natural language interaction with ArcGIS Enterprise using LangChain and MCP.
 
-![Tech Stack](https://skillicons.dev/icons?i=docker,svelte,typescript,python,fastapi,postgresql,ubuntu,bash,npm)
+![Tech Stack](https://skillicons.dev/icons?i=docker,svelte,typescript,tailwindcss,python,fastapi,postgresql,ubuntu,bash,npm)
 
 ## Overview
 
@@ -26,7 +26,6 @@ graph TB
 - **Service Discovery**: Automatically list and find hosted services
 - **Service Details**: Get published service information like layers and extents
 - **Query Layer**: Query layer with parameters such as record counts
-- **Real-time Chat**: Responsive chat interface with the AI agent
 
 ## Quick Start
 
@@ -48,15 +47,11 @@ The project includes a modern Svelte-based frontend for interactive web access:
 ```bash
 cd frontend
 docker-compose up --build
-
-# Or run locally for development
-npm install
-npm run dev
 ```
 
-**Frontend Access**: http://localhost:3000 (Docker) or http://localhost:5173 (local dev)
+**Frontend Access**: http://localhost:3000
 
-## Usage Examples
+## API Usage Examples
 
 ```bash
 # List services
@@ -72,6 +67,7 @@ curl -X POST http://localhost:8000/chat \
 
 ## Code Formatting and Linting
 
+### Backend (Python)
 Both Agent and MCP are using FastAPI built on Python, to run the `black` linter:
 
 ```bash
@@ -79,9 +75,18 @@ docker exec -it docker-arcgis-enterprise-agent-1 black /app
 docker exec -it docker-arcgis-enterprise-mcp-1 black /app
 ```
 
+### Frontend (Svelte/TypeScript)
+The frontend uses Prettier for code formatting:
+
+```bash
+cd frontend
+npm run format
+npm run format:check
+```
+
 ## Endpoints
 
-- **Frontend**: http://localhost:3000 (Docker) / http://localhost:5173 (local dev)
+- **Frontend**: http://localhost:3000
 - **AI Agent**: http://localhost:8000/chat
 - **MCP Server**: http://localhost:8001
 - **ArcGIS Portal**: https://portal.local:7443
