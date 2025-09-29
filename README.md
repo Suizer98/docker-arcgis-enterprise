@@ -40,16 +40,20 @@ cp configurebasedeployment.properties.SAMPLE configurebasedeployment.properties
 docker-compose up -d
 ```
 
-### Frontend Setup
+This will start all services including:
+- **ArcGIS Enterprise** (Server, Portal, DataStore)
+- **PostgreSQL** database
+- **AI Agent** with LangChain and Groq
+- **MCP Server** for ArcGIS integration
+- **Frontend** web interface
 
-The project includes a modern Svelte-based frontend for interactive web access:
+### Access Points
 
-```bash
-cd frontend
-docker-compose up --build
-```
-
-**Frontend Access**: http://localhost:3000
+- **Frontend Web Interface**: http://localhost:3000
+- **AI Agent API**: http://localhost:8000
+- **MCP Server**: http://localhost:8001
+- **ArcGIS Portal**: https://portal.local:7443
+- **ArcGIS Server**: https://server.local:6443
 
 ## API Usage Examples
 
@@ -83,14 +87,6 @@ cd frontend
 npm run format
 npm run format:check
 ```
-
-## Endpoints
-
-- **Frontend**: http://localhost:3000
-- **AI Agent**: http://localhost:8000/chat
-- **MCP Server**: http://localhost:8001
-- **ArcGIS Portal**: https://portal.local:7443
-- **ArcGIS Server**: https://server.local:6443
 
 ## Tech Stack
 
