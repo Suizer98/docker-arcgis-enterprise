@@ -6,7 +6,6 @@
   export let messagesContainer: HTMLDivElement
   export let messages: Array<{id: string, role: 'user' | 'assistant', content: string, timestamp?: Date}>
   export let isLoading: boolean
-  export let chatWidth: number
 
   // Copy message to clipboard
   async function copyMessage(content: string) {
@@ -31,9 +30,7 @@
 >
   {#each messages as message, messageIndex (messageIndex)}
     <div 
-      class="p-3 rounded-lg group relative"
-      class:max-w-xs={chatWidth < 400}
-      class:max-w-sm={chatWidth >= 400}
+      class="p-3 rounded-lg group relative max-w-2xl"
       class:ml-auto={message.role === 'user'}
       class:bg-primary={message.role === 'user'}
       class:text-primary-foreground={message.role === 'user'}
@@ -82,7 +79,7 @@
   <!-- Typing Indicator -->
   {#if isLoading}
     <div 
-      class="p-3 rounded-lg bg-muted max-w-xs"
+      class="p-3 rounded-lg bg-muted max-w-2xl"
       transition:fly={{ x: -200, duration: 300 }}
     >
       <div class="flex items-center space-x-2">

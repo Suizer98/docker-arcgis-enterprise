@@ -1,10 +1,12 @@
+import { API_URLS } from './config/apiConfig';
+
 // AI Configuration
 export const AI_CONFIG = {
   // Model settings
   model: 'llama-3.1-8b-instant',
 
-  // API settings - Use environment variable or fallback to localhost
-  apiUrl: import.meta.env.VITE_AGENT_API_URL ? `${import.meta.env.VITE_AGENT_API_URL}/chat` : 'http://localhost:8000/chat',
+  // API settings - Use centralized config
+  apiUrl: API_URLS.CHAT,
 
   // Response settings
   maxTokens: 1000,

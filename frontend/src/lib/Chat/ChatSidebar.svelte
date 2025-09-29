@@ -8,6 +8,7 @@
   import { toggleMode } from 'mode-watcher'
   import ChatMessages from './ChatMessages.svelte'
   import ChatInput from './ChatInput.svelte'
+  import HealthIndicator from '$lib/components/HealthIndicator.svelte'
 
   export let isOpen = true
 
@@ -21,22 +22,6 @@
       aiService.addMessage('assistant', 'Hi! I\'m your Docker ArcGIS Enterprise + AI Assistant. How can I help you with maps and geospatial data today?')
       updateMessages()
     }
-  }
-  
-  // Draggable and resizable state
-  let chatWidth = 420 // Default width
-  let isDragging = false
-  let isResizing = false
-  let dragStartX = 0
-  let resizeStartX = 0
-  let resizeStartWidth = 0
-  
-  // Get maximum width (half screen on both desktop and mobile)
-  function getMaxWidth() {
-    if (typeof window !== 'undefined') {
-      return Math.floor(window.innerWidth / 2) // Half width on both desktop and mobile
-    }
-    return 400 // Default fallback
   }
   
   // Auto-scroll reference
@@ -58,10 +43,6 @@
   let initialized = false
   $: if (typeof window !== 'undefined' && !initialized) {
     initializeChat()
-    // Set half-width on mobile
-    if ($isMobile) {
-      chatWidth = Math.floor(window.innerWidth / 2)
-    }
     initialized = true
   }
 
@@ -70,15 +51,6 @@
   $: if (messages.length > 0) {
     clearTimeout(scrollTimeout)
     scrollTimeout = setTimeout(scrollToBottom, 100)
-  }
-
-  function toggleSidebar() {
-    isOpen = !isOpen
-    
-    // Auto-scroll when opening sidebar
-    if (isOpen) {
-      setTimeout(scrollToBottom, 200)
-    }
   }
 
   async function handleSubmit(event: SubmitEvent) {
@@ -120,106 +92,18 @@
       handleSubmit(new Event('submit') as SubmitEvent)
     }
   }
-
-  // Drag functions
-  function handleDragStart(event: MouseEvent) {
-    isDragging = true
-    dragStartX = event.clientX
-    document.addEventListener('mousemove', handleDragMove)
-    document.addEventListener('mouseup', handleDragEnd)
-    event.preventDefault()
-  }
-
-  function handleDragMove(event: MouseEvent) {
-    if (!isDragging) return
-    const deltaX = event.clientX - dragStartX
-    const maxWidth = getMaxWidth()
-    
-    // On mobile, don't allow dragging - keep half width
-    if ($isMobile) return
-    
-    const newWidth = Math.max(280, Math.min(maxWidth, chatWidth - deltaX))
-    chatWidth = newWidth
-    dragStartX = event.clientX
-  }
-
-  function handleDragEnd() {
-    isDragging = false
-    document.removeEventListener('mousemove', handleDragMove)
-    document.removeEventListener('mouseup', handleDragEnd)
-  }
-
-  // Resize functions
-  function handleResizeStart(event: MouseEvent) {
-    isResizing = true
-    resizeStartX = event.clientX
-    resizeStartWidth = chatWidth
-    document.addEventListener('mousemove', handleResizeMove)
-    document.addEventListener('mouseup', handleResizeEnd)
-    event.preventDefault()
-    event.stopPropagation()
-  }
-
-  function handleResizeMove(event: MouseEvent) {
-    if (!isResizing) return
-    const deltaX = event.clientX - resizeStartX
-    const maxWidth = getMaxWidth()
-    
-    // On mobile, don't allow resizing - keep half width
-    if ($isMobile) return
-    
-    const newWidth = Math.max(280, Math.min(maxWidth, resizeStartWidth - deltaX))
-    chatWidth = newWidth
-  }
-
-  function handleResizeEnd() {
-    isResizing = false
-    document.removeEventListener('mousemove', handleResizeMove)
-    document.removeEventListener('mouseup', handleResizeEnd)
-  }
 </script>
 
-<!-- Chat Toggle Button (only show when sidebar is closed) -->
-{#if !isOpen}
-  <Button 
-    class="fixed top-4 right-4 z-[9999] size-10 bg-background/95 backdrop-blur-sm border-border hover:bg-accent hover:text-accent-foreground shadow-lg dark:bg-black dark:text-white dark:border-gray-700 dark:hover:bg-gray-800"
-    onclick={toggleSidebar}
-    variant="outline"
-    size="icon"
-  >
-    <svg 
-      class="w-5 h-5" 
-      fill="none" 
-      stroke="currentColor" 
-      viewBox="0 0 24 24"
-    >
-      <path 
-        stroke-linecap="round" 
-        stroke-linejoin="round" 
-        stroke-width="2" 
-        d="M4 6h16M4 12h16M4 18h16"
-      />
-    </svg>
-  </Button>
-{/if}
-
-<!-- Chat Sidebar -->
-<div 
-  class="fixed top-0 right-0 h-full z-40 transform transition-transform duration-300 ease-in-out flex"
-  class:translate-x-full={!isOpen}
-  class:translate-x-0={isOpen}
-  class:w-full={!$isMobile && chatWidth < 400}
-  class:w-80={!$isMobile && chatWidth >= 400 && chatWidth < 600}
-  style="width: {$isMobile ? '70%' : (chatWidth >= 600 ? chatWidth + 'px' : 'auto')};"
->
-  <Card class="h-full rounded-none border-r-0 border-t-0 border-b-0 flex flex-col w-full relative">
-    <!-- Draggable Header -->
-    <CardHeader 
-      class="pb-3 flex-shrink-0 select-none {$isMobile ? '' : 'cursor-move'}"
-      onmousedown={$isMobile ? undefined : handleDragStart}
-    >
+<!-- Full Screen Chat -->
+<div class="h-full w-full flex">
+  <Card class="h-full w-full rounded-none flex flex-col relative">
+    <!-- Header -->
+    <CardHeader class="pb-3 flex-shrink-0">
       <div class="flex items-center justify-between">
-        <CardTitle class="text-lg">Docker ArcGIS Enterprise + AI</CardTitle>
+        <div class="flex flex-col space-y-1">
+          <CardTitle class="text-lg">Docker ArcGIS Enterprise + AI</CardTitle>
+          <HealthIndicator />
+        </div>
         <div class="flex space-x-2">
           <!-- Theme Toggle Button -->
           <Button 
@@ -238,17 +122,6 @@
             </svg>
             <span class="sr-only">Toggle theme</span>
           </Button>
-          <!-- Close Button -->
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onclick={toggleSidebar}
-            class="p-1 h-8 w-8 hover:bg-accent hover:text-accent-foreground text-foreground"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
-          </Button>
         </div>
       </div>
     </CardHeader>
@@ -258,7 +131,6 @@
       bind:messagesContainer
       {messages}
       {isLoading}
-      {chatWidth}
     />
     
     <!-- Input -->
@@ -270,16 +142,5 @@
         onkeydown={handleKeydown}
       />
     </div>
-    
-    <!-- Resize Handle -->
-    {#if !$isMobile}
-      <div 
-        class="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-blue-500 hover:opacity-50 transition-opacity"
-        onmousedown={handleResizeStart}
-        role="button"
-        tabindex="0"
-        aria-label="Resize chat sidebar"
-      ></div>
-    {/if}
   </Card>
 </div>

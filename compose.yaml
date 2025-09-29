@@ -168,3 +168,19 @@ services:
       - DEBUG=${DEBUG:-false}
     volumes:
       - ./agent:/app:rw
+
+  frontend:
+    image: arcgis-frontend
+    hostname: frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+    environment:
+      - NODE_ENV=development
+      - VITE_AGENT_API_URL=http://localhost:8000
+    working_dir: /app
+    command: npm run dev -- --host 0.0.0.0

@@ -1,12 +1,10 @@
 <script lang="ts">
-  import { MapView } from './lib/Map'
   import { ChatSidebar } from './lib/Chat'
   import { ModeWatcher } from 'mode-watcher'
 </script>
 
 <ModeWatcher />
 <main>
-  <MapView />
   <ChatSidebar />
 </main>
 
