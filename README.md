@@ -2,7 +2,7 @@
 
 > **AI-Powered ArcGIS Enterprise** - Natural language interaction with ArcGIS Enterprise using LangChain and MCP.
 
-![Tech Stack](https://skillicons.dev/icons?i=docker,svelte,typescript,tailwindcss,python,fastapi,postgresql,ubuntu,bash,npm)
+![Tech Stack](https://skillicons.dev/icons?i=docker,python,fastapi,svelte,typescript,postgresql,ubuntu)
 
 ## Overview
 
@@ -12,12 +12,11 @@ Extends [docker-arcgis-enterprise](https://github.com/Wildsong/docker-arcgis-ent
 
 ```mermaid
 graph TB
-    A[Frontend - Svelte] --> B[LangChain Agent]
-    B --> C[Groq LLM]
-    B --> D[MCP Server]
-    D --> E[ArcGIS REST API]
-    D --> F[ArcGIS Portal Token]
-    E --> G[ArcGIS Enterprise Server]
+    A[LangChain Agent] --> B[Groq LLM]
+    A --> C[MCP Server]
+    C --> D[ArcGIS REST API]
+    C --> E[ArcGIS Portal Token]
+    D --> F[ArcGIS Enterprise Server]
 ```
 
 ## Features
@@ -33,64 +32,44 @@ graph TB
 For docker ArcGIS Enterprise setup please refer to the [References](#references) section below.
 
 ```bash
-git clone https://www.github.com/Suizer98/docker-arcgis-enterprise.git
 cd docker-arcgis-enterprise
 cp sample.env .env
 cp configurebasedeployment.properties.SAMPLE configurebasedeployment.properties
 docker-compose up -d
 ```
 
-This will start all services including:
-- **ArcGIS Enterprise** (Server, Portal, DataStore)
-- **PostgreSQL** database
-- **AI Agent** with LangChain and Groq
-- **MCP Server** for ArcGIS integration
-- **Frontend** web interface
+## Usage Examples
 
-### Access Points
-
-- **Frontend Web Interface**: http://localhost:3000
-- **AI Agent API**: http://localhost:8000
-- **MCP Server**: http://localhost:8001
-- **ArcGIS Portal**: https://portal.local:7443
-- **ArcGIS Server**: https://server.local:6443
-
-## API Usage Examples
+### List Services
 
 ```bash
-# List services
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "What services are available in ArcGIS Server?"}'
+```
 
-# Get service details
+![List Services Example](docs/dockerarcgis14.png)
+
+### Get Service Details
+
+```bash
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "Is there a service called TouristAttractions?"}'
 ```
 
-## Code Formatting and Linting
+![Service Details Example](docs/dockerarcgis15.png)
 
-### Backend (Python)
-Both Agent and MCP are using FastAPI built on Python, to run the `black` linter:
+## Endpoints
 
-```bash
-docker exec -it docker-arcgis-enterprise-agent-1 black /app
-docker exec -it docker-arcgis-enterprise-mcp-1 black /app
-```
-
-### Frontend (Svelte/TypeScript)
-The frontend uses Prettier for code formatting:
-
-```bash
-cd frontend
-npm run format
-npm run format:check
-```
+- **Frontend**: http://localhost:3000
+- **AI Agent**: http://localhost:8000/chat
+- **MCP Server**: http://localhost:8001
+- **ArcGIS Portal**: https://portal.local:7443
+- **ArcGIS Server**: https://server.local:6443
 
 ## Tech Stack
 
-- **Frontend**: Svelte 5 + TypeScript + Tailwind CSS + ArcGIS JS API
 - **LLM Agent**: LangChain + Groq Llama 3.1 8B
 - **MCP**: FastAPI with Model Context Protocol
 - **ArcGIS**: Enterprise 11.4 (Server, Portal, DataStore)
