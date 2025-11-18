@@ -1,0 +1,17 @@
+{
+    "mcpServers": {
+        "atlassian": {
+            "type": "http",
+            "url": "https://mcp.atlassian.com/v1/sse",
+            "env": {
+            "ATLASSIAN_URL": "https://esrisingapore.atlassian.net/",
+            "ATLASSIAN_EMAIL": "sz.tey@esrisingapore.com.sg",
+            "ATLASSIAN_API_TOKEN": "xxx"
+            }
+        },
+        "arcgis-enterprise": {
+        "type": "http",
+        "url": "http://localhost:8001/v1/sse"
+        }
+    }
+}

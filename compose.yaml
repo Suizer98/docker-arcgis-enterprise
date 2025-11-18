@@ -136,7 +136,7 @@ services:
       PGADMIN_DISABLE_POSTFIX: 1
 
   mcp:
-    image: arcgis-fastapi-server
+    image: arcgis-mcp-server
     hostname: mcp
     build:
       context: ./mcp
@@ -147,11 +147,13 @@ services:
     environment:
       - ARCGIS_SERVER_URL=https://${GISSERVER}:6443/arcgis/rest/services
       - ARCGIS_PORTAL_URL=https://${PORTAL}:7443
-      - ARCGIS_USERNAME=${MCP_USERNAME}
-      - ARCGIS_PASSWORD=${MCP_PASSWORD}
+      - MCP_USERNAME=${MCP_USERNAME}
+      - MCP_PASSWORD=${MCP_PASSWORD}
+      - PORT=8001
       - DEBUG=${DEBUG:-false}
     volumes:
       - ./mcp:/app:rw
+    command: python main.py
 
   agent:
     image: arcgis-langchain-agent
@@ -164,7 +166,7 @@ services:
     env_file: ./.env
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - MCP_SERVER_URL=http://mcp:8001/mcp
+      - MCP_SERVER_URL=http://mcp:8001
       - DEBUG=${DEBUG:-false}
     volumes:
       - ./agent:/app:rw

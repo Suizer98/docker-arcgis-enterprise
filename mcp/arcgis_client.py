@@ -25,8 +25,8 @@ class ArcGISClient:
         required_vars = {
             "ARCGIS_SERVER_URL": self.server_url,
             "ARCGIS_PORTAL_URL": self.portal_url,
-            "ARCGIS_USERNAME": self.username,
-            "ARCGIS_PASSWORD": self.password,
+            "MCP_USERNAME": self.username,
+            "MCP_PASSWORD": self.password,
         }
 
         missing_vars = [var for var, value in required_vars.items() if not value]
@@ -84,7 +84,7 @@ class ArcGISClient:
         """Get authentication token from ArcGIS Portal"""
         if not self.username or not self.password:
             raise ValueError(
-                "ARCGIS_USERNAME and ARCGIS_PASSWORD environment variables are required"
+                "MCP_USERNAME and MCP_PASSWORD environment variables are required"
             )
 
         try:

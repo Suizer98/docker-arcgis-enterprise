@@ -3,7 +3,7 @@
 import logging
 import os
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 # Pydantic models for API
 class ListServicesRequest(BaseModel):
     pass
+    
+    class Config:
+        # Allow empty body for MCP compatibility
+        extra = "forbid"
 
 
 class GetServiceDetailsRequest(BaseModel):
@@ -79,11 +83,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize server
-arcgis_server = ArcGISClient()
+# Initialize server (lazy initialization to avoid blocking startup)
+arcgis_server = None
 
-# Initialize FastAPI-MCP
-mcp = FastApiMCP(app)
+def get_arcgis_server():
+    """Get or initialize ArcGIS client (lazy initialization)"""
+    global arcgis_server
+    if arcgis_server is None:
+        logger.info("Initializing ArcGIS client...")
+        arcgis_server = ArcGISClient()
+        logger.info("ArcGIS client initialized")
+    return arcgis_server
+
+# Note: FastApiMCP will be initialized AFTER all routes are defined
+# This ensures all endpoints are discovered and registered as MCP tools
 
 
 @app.get("/")
@@ -91,7 +104,9 @@ async def root():
     return {
         "message": "ArcGIS Enterprise MCP Server",
         "version": "1.0.0",
-        "protocol": "MCP (Model Context Protocol)",
+        "protocol": "MCP (Model Context Protocol) + HTTP REST API",
+        "description": "This server works in dual mode: MCP protocol for Cursor, HTTP REST API for agent/frontend",
+        "mcp_endpoint": "/v1/sse",
         "endpoints": {
             "list_services": "/list-services",
             "get_service_details": "/get-service-details",
@@ -102,7 +117,12 @@ async def root():
             "server_info": "/server-info",
             "portal_info": "/portal-info",
             "health": "/health",
-            "mcp": "/mcp",
+            "list_functions": "/list-functions",
+            "mcp_sse": "/v1/sse",
+        },
+        "usage": {
+            "cursor": "Connect via MCP at http://localhost:8001/v1/sse",
+            "agent": "Use HTTP endpoints directly at http://mcp:8001 (from Docker) or http://localhost:8001 (from host)",
         },
     }
 
@@ -111,13 +131,14 @@ async def root():
 async def health_check():
     try:
         # Test basic connectivity
-        server_info = await arcgis_server.get_server_info()
+        server = get_arcgis_server()
+        server_info = await server.get_server_info()
         return {
             "status": "healthy",
-            "arcgis_server": arcgis_server.server_url,
-            "arcgis_portal": arcgis_server.portal_url,
+            "arcgis_server": server.server_url,
+            "arcgis_portal": server.portal_url,
             "credentials_configured": bool(
-                arcgis_server.username and arcgis_server.password
+                server.username and server.password
             ),
             "version": "1.0.0",
         }
@@ -125,20 +146,37 @@ async def health_check():
         return {"status": "unhealthy", "error": str(e), "version": "1.0.0"}
 
 
-@app.post("/list-services")
-async def list_services(request: ListServicesRequest):
+@app.post(
+    "/list-services",
+    summary="List all ArcGIS services",
+    description="Get all available ArcGIS services from the server (includes all folders). This endpoint works for both MCP (Cursor) and HTTP (agent) clients.",
+    tags=["services"],
+    operation_id="list_services",
+)
+async def list_services(request: Optional[ListServicesRequest] = Body(None)):
+    """List all ArcGIS services from all folders"""
     try:
-        services = await arcgis_server.list_services()
+        # Handle empty body for MCP compatibility
+        if request is None:
+            request = ListServicesRequest()
+        services = await get_arcgis_server().list_services()
         return {"services": services, "count": len(services)}
     except Exception as e:
         logger.error(f"Error listing services: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/get-service-details")
+@app.post(
+    "/get-service-details",
+    summary="Get service details",
+    description="Get detailed information about a specific ArcGIS service. This endpoint works for both MCP (Cursor) and HTTP (agent) clients.",
+    tags=["services"],
+    operation_id="get_service_details",
+)
 async def get_service_details(request: GetServiceDetailsRequest):
+    """Get detailed information about a specific ArcGIS service"""
     try:
-        details = await arcgis_server.get_service_details(
+        details = await get_arcgis_server().get_service_details(
             request.service_name, request.folder
         )
         return {
@@ -154,7 +192,7 @@ async def get_service_details(request: GetServiceDetailsRequest):
 @app.post("/get-portal-token")
 async def get_portal_token(request: GetPortalTokenRequest):
     try:
-        token = await arcgis_server.get_portal_token(request.expiration)
+        token = await get_arcgis_server().get_portal_token(request.expiration)
         return {
             "token": token,
             "expiration_minutes": request.expiration,
@@ -165,10 +203,16 @@ async def get_portal_token(request: GetPortalTokenRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/test-connection")
+@app.get(
+    "/test-connection",
+    summary="Test connection",
+    description="Test connection to ArcGIS Server and Portal. This endpoint works for both MCP (Cursor) and HTTP (agent) clients.",
+    tags=["system"],
+)
 async def test_connection():
+    """Test connection to ArcGIS Server and Portal"""
     try:
-        result = await arcgis_server.test_connection()
+        result = await get_arcgis_server().test_connection()
         return result
     except Exception as e:
         logger.error(f"Error testing connection: {e}")
@@ -178,7 +222,7 @@ async def test_connection():
 @app.get("/server-info")
 async def get_server_info():
     try:
-        info = await arcgis_server.get_server_info()
+        info = await get_arcgis_server().get_server_info()
         return info
     except Exception as e:
         logger.error(f"Error getting server info: {e}")
@@ -188,7 +232,7 @@ async def get_server_info():
 @app.get("/portal-info")
 async def get_portal_info():
     try:
-        info = await arcgis_server.get_portal_info()
+        info = await get_arcgis_server().get_portal_info()
         return info
     except Exception as e:
         logger.error(f"Error getting portal info: {e}")
@@ -198,14 +242,20 @@ async def get_portal_info():
 @app.get("/token-status")
 async def get_token_status():
     try:
-        status = arcgis_server.get_token_status()
+        status = get_arcgis_server().get_token_status()
         return status
     except Exception as e:
         logger.error(f"Error getting token status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/query-service-layer")
+@app.post(
+    "/query-service-layer",
+    summary="Query service layer",
+    description="Query ArcGIS REST API directly with a URL and parameters. This endpoint works for both MCP (Cursor) and HTTP (agent) clients.",
+    tags=["query"],
+    operation_id="query_service_layer",
+)
 async def query_service_layer(request: QueryArcGISRequest):
     """Query ArcGIS REST API directly with a URL and parameters (simplified approach)"""
     try:
@@ -213,11 +263,12 @@ async def query_service_layer(request: QueryArcGISRequest):
         import json
 
         # Ensure we have a valid token
-        await arcgis_server._ensure_valid_token()
+        server = get_arcgis_server()
+        await server._ensure_valid_token()
 
         # Add token to params if available
-        if arcgis_server.portal_token:
-            request.params["token"] = arcgis_server.portal_token
+        if server.portal_token:
+            request.params["token"] = server.portal_token
 
         logger.info(f"Querying ArcGIS URL: {request.url}")
         logger.info(f"With parameters: {request.params}")
@@ -252,10 +303,17 @@ async def query_service_layer(request: QueryArcGISRequest):
         }
 
 
-@app.post("/get-layer-info")
+@app.post(
+    "/get-layer-info",
+    summary="Get layer information",
+    description="Get information about a specific layer in a service. This endpoint works for both MCP (Cursor) and HTTP (agent) clients.",
+    tags=["layers"],
+    operation_id="get_layer_info",
+)
 async def get_layer_info(request: GetLayerInfoRequest):
+    """Get information about a specific layer in a service"""
     try:
-        result = await arcgis_server.get_layer_info(
+        result = await get_arcgis_server().get_layer_info(
             service_name=request.service_name,
             folder=request.folder,
             layer_id=request.layer_id,
@@ -350,18 +408,47 @@ async def list_functions():
             },
         ]
 
-        return {
+        result = {
             "functions": functions,
             "count": len(functions),
             "server": "ArcGIS Enterprise MCP Server",
         }
+        return result
     except Exception as e:
         logger.error(f"Error listing functions: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Initialize FastAPI-MCP AFTER all routes are defined
+# This ensures all endpoints are discovered and registered as MCP tools
+mcp = FastApiMCP(app)
+
 # Mount the MCP server to the FastAPI app
+# FastApiMCP will expose the MCP server at /mcp by default
 mcp.mount()
+
+# Call setup_server() to ensure all tools are properly registered
+# This is important if routes were added before mounting
+try:
+    if hasattr(mcp, 'setup_server'):
+        mcp.setup_server()
+        logger.info("MCP server setup completed, tools should be registered")
+    else:
+        logger.info("MCP server mounted (setup_server not available)")
+except Exception as e:
+    logger.warning(f"Could not call setup_server: {e}")
+
+# Log registered tools for debugging
+try:
+    if hasattr(mcp, 'list_tools'):
+        tools = mcp.list_tools()
+        logger.info(f"MCP registered {len(tools)} tools: {[t.get('name', 'unknown') for t in tools]}")
+    elif hasattr(mcp, '_tools'):
+        logger.info(f"MCP registered {len(mcp._tools)} tools")
+except Exception as e:
+    logger.debug(f"Could not list tools: {e}")
 
 if __name__ == "__main__":
     load_dotenv()
