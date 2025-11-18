@@ -60,6 +60,12 @@ curl -X POST http://localhost:8000/chat \
 
 ![Service Details Example](docs/dockerarcgis15.png)
 
+### Cursor Integration
+
+To enable tool discovery in Cursor, copy the contents of `mcp/mcp.json.example` to `~/.cursor/mcp.json`.
+
+![Cursor Integration Example](docs/dockerarcgis17.png)
+
 ## Endpoints
 
 - **Frontend**: http://localhost:3000
