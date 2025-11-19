@@ -2,7 +2,9 @@
 
 import logging
 import os
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
+import httpx
+import traceback
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -32,29 +34,6 @@ class GetServiceDetailsRequest(BaseModel):
 
 class GetPortalTokenRequest(BaseModel):
     expiration: int = 60
-
-
-class QueryServiceLayerRequest(BaseModel):
-    service_name: str
-    folder: str = ""
-    layer_id: Optional[int] = 0
-    where: str = "1=1"
-    object_ids: Optional[List[int]] = None
-    geometry: Optional[Dict[str, Any]] = None
-    geometry_type: Optional[str] = "esriGeometryEnvelope"
-    spatial_rel: Optional[str] = "esriSpatialRelIntersects"
-    out_fields: str = "*"
-    return_geometry: bool = True
-    return_ids_only: bool = False
-    return_count_only: bool = False
-    order_by_fields: Optional[str] = None
-    group_by_fields_for_statistics: Optional[str] = None
-    out_statistics: Optional[List[Dict[str, Any]]] = None
-    result_offset: Optional[int] = None
-    result_record_count: Optional[int] = None
-    return_distinct_values: bool = False
-    return_extent_only: bool = False
-    max_record_count: Optional[int] = 1000
 
 
 class GetLayerInfoRequest(BaseModel):
@@ -162,7 +141,6 @@ async def list_services(request: Optional[ListServicesRequest] = Body(None)):
         services = await get_arcgis_server().list_services()
         return {"services": services, "count": len(services)}
     except Exception as e:
-        logger.error(f"Error listing services: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -185,7 +163,6 @@ async def get_service_details(request: GetServiceDetailsRequest):
             "details": details,
         }
     except Exception as e:
-        logger.error(f"Error getting service details: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -199,7 +176,6 @@ async def get_portal_token(request: GetPortalTokenRequest):
             "success": token is not None,
         }
     except Exception as e:
-        logger.error(f"Error getting portal token: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -215,7 +191,6 @@ async def test_connection():
         result = await get_arcgis_server().test_connection()
         return result
     except Exception as e:
-        logger.error(f"Error testing connection: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -225,7 +200,6 @@ async def get_server_info():
         info = await get_arcgis_server().get_server_info()
         return info
     except Exception as e:
-        logger.error(f"Error getting server info: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -235,7 +209,6 @@ async def get_portal_info():
         info = await get_arcgis_server().get_portal_info()
         return info
     except Exception as e:
-        logger.error(f"Error getting portal info: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -245,7 +218,6 @@ async def get_token_status():
         status = get_arcgis_server().get_token_status()
         return status
     except Exception as e:
-        logger.error(f"Error getting token status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -259,9 +231,6 @@ async def get_token_status():
 async def query_service_layer(request: QueryArcGISRequest):
     """Query ArcGIS REST API directly with a URL and parameters (simplified approach)"""
     try:
-        import httpx
-        import json
-
         # Ensure we have a valid token
         server = get_arcgis_server()
         await server._ensure_valid_token()
@@ -294,7 +263,6 @@ async def query_service_layer(request: QueryArcGISRequest):
                     "params": request.params,
                 }
     except Exception as e:
-        logger.error(f"Error querying ArcGIS: {e}")
         return {
             "success": False,
             "error": str(e),
@@ -320,7 +288,6 @@ async def get_layer_info(request: GetLayerInfoRequest):
         )
         return result
     except Exception as e:
-        logger.error(f"Error getting layer info: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -415,8 +382,6 @@ async def list_functions():
         }
         return result
     except Exception as e:
-        logger.error(f"Error listing functions: {e}")
-        import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 

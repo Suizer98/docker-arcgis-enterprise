@@ -3,7 +3,6 @@
 import logging
 import os
 from typing import Dict, Any, List, Optional
-from pydantic import BaseModel, Field
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -105,7 +104,6 @@ async def get_discovered_tools():
                 tools_info.append(tool_info)
                 logger.info(f"Successfully processed tool: {tool_info['name']}")
             except Exception as e:
-                logger.error(f"Error processing tool {i}: {e}")
                 tools_info.append(
                     {
                         "name": f"error_{i}",
@@ -121,10 +119,6 @@ async def get_discovered_tools():
             "initialized": agent._initialized,
         }
     except Exception as e:
-        logger.error(f"Error in tools endpoint: {e}")
-        import traceback
-
-        logger.error(f"Traceback: {traceback.format_exc()}")
         return {
             "error": str(e),
             "tools": [],

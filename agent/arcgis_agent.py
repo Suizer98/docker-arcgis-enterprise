@@ -3,7 +3,8 @@
 import json
 import logging
 import os
-import re
+import asyncio
+import httpx
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
 
@@ -100,8 +101,6 @@ class ArcGISLangChainAgent:
     async def _discover_mcp_tools(self) -> List[Dict[str, Any]]:
         """Discover available tools from MCP server using list-functions endpoint"""
         try:
-            import httpx
-
             base_url = (
                 self.mcp_server_url[:-4]
                 if self.mcp_server_url.endswith("/mcp")
@@ -123,8 +122,6 @@ class ArcGISLangChainAgent:
         def dynamic_tool_func(**kwargs) -> str:
             """Dynamic tool function that calls MCP endpoint"""
             try:
-                import asyncio
-
                 if function_info["name"] not in self.current_tools_used:
                     self.current_tools_used.append(function_info["name"])
                 logger.info(f"Calling tool {function_info['name']} with args: {kwargs}")
@@ -139,7 +136,6 @@ class ArcGISLangChainAgent:
                 logger.info(f"Tool {function_info['name']} result: {result[:200]}...")
                 return result
             except Exception as e:
-                logger.error(f"Error in tool {function_info['name']}: {e}")
                 return f"Error: {str(e)}"
 
         # Create a proper schema based on the function parameters
@@ -328,8 +324,6 @@ class ArcGISLangChainAgent:
     ) -> str:
         """Call MCP function dynamically based on discovered function info"""
         try:
-            import httpx
-
             base_url = (
                 self.mcp_server_url[:-4]
                 if self.mcp_server_url.endswith("/mcp")
@@ -337,7 +331,6 @@ class ArcGISLangChainAgent:
             )
             function_info = self.function_info.get(function_name)
             if not function_info:
-                logger.error(f"Function {function_name} not found in function_info")
                 return f"Error: Function {function_name} not found"
 
             endpoint = function_info.get("endpoint", f"/{function_name}")
@@ -362,15 +355,8 @@ class ArcGISLangChainAgent:
                     logger.info(f"Response data type: {type(result)}")
                     return json.dumps(result, indent=2)
                 else:
-                    logger.error(
-                        f"HTTP error: {response.status_code} - {response.text}"
-                    )
                     return f"Error: HTTP {response.status_code}: {response.text}"
         except Exception as e:
-            logger.error(f"Exception in _call_mcp_tool_dynamic: {e}")
-            import traceback
-
-            logger.error(f"Traceback: {traceback.format_exc()}")
             return f"Error: {str(e)}"
 
     async def _create_langchain_tools_dynamic(self) -> List[BaseTool]:
@@ -564,10 +550,6 @@ class ArcGISLangChainAgent:
             }
 
         except Exception as e:
-            logger.error(f"Error processing message: {e}")
-            import traceback
-
-            logger.error(f"Traceback: {traceback.format_exc()}")
             return {
                 "message": f"I encountered an error: {str(e)}. Please try again.",
                 "session_id": self.session_id,

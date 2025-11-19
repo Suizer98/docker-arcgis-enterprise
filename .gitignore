@@ -10,6 +10,13 @@
 # ignore python virtual environments
 venv/
 
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
 # Environment files
 .env
 

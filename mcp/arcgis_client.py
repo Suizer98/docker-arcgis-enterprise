@@ -147,10 +147,8 @@ class ArcGISClient:
                 if response.status_code == 200:
                     return response.json()
                 else:
-                    logger.error(f"API Error: {response.status_code}")
                     return {"error": f"HTTP {response.status_code}"}
         except Exception as e:
-            logger.error(f"Connection error: {e}")
             return {"error": str(e)}
 
     async def list_services(self) -> List[Dict[str, Any]]:
@@ -184,7 +182,6 @@ class ArcGISClient:
 
             return {"services": simplified_services, "count": len(simplified_services)}
         except Exception as e:
-            logger.error(f"Error listing services: {e}")
             return {"error": str(e)}
 
     async def get_service_details(
@@ -286,7 +283,6 @@ class ArcGISClient:
 
             return result
         except Exception as e:
-            logger.error(f"Error getting service details: {e}")
             return {"error": str(e)}
 
     async def test_connection(self) -> Dict[str, Any]:
@@ -512,16 +508,12 @@ class ArcGISClient:
 
                     return result
                 else:
-                    logger.error(
-                        f"Query failed: {response.status_code} - {response.text}"
-                    )
                     return {
                         "error": f"Query failed with status {response.status_code}",
                         "details": response.text,
                     }
 
         except Exception as e:
-            logger.error(f"Error querying service layer: {e}")
             return {"error": str(e)}
 
     async def get_layer_info(
@@ -584,14 +576,10 @@ class ArcGISClient:
 
                     return result
                 else:
-                    logger.error(
-                        f"Layer info request failed: {response.status_code} - {response.text}"
-                    )
                     return {
                         "error": f"Layer info request failed with status {response.status_code}",
                         "details": response.text,
                     }
 
         except Exception as e:
-            logger.error(f"Error getting layer info: {e}")
             return {"error": str(e)}
