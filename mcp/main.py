@@ -418,9 +418,14 @@ except Exception as e:
 if __name__ == "__main__":
     load_dotenv()
 
+    DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+    
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=8001,
-        reload=os.getenv("DEBUG", "false").lower() == "true",
+        reload=DEBUG,
+        reload_dirs=["/app"] if DEBUG else None,
+        timeout_graceful_shutdown=2,  # Force shutdown as cursor is the active connection
+        timeout_keep_alive=5,
     )

@@ -64,6 +64,11 @@ async def health_check():
         # Test Groq connection
         test_response = await agent.groq_client.ainvoke("Hello")
 
+        # Initialize agent if not already initialized to get accurate tools count
+        if not agent._initialized:
+            logger.info("Agent not initialized in health check, initializing now...")
+            await agent._initialize()
+
         return {
             "status": "healthy",
             "groq_api": "connected",
